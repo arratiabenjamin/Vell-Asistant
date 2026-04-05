@@ -125,6 +125,8 @@ export async function searchTextTool(
     const lines = content.split('\n')
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
       const current = lines[lineIndex]
+      if (typeof current !== 'string') continue
+
       const haystack = caseSensitive ? current : current.toLowerCase()
       if (!haystack.includes(needle)) continue
 

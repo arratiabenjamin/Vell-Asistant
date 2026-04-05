@@ -1,0 +1,122 @@
+name: core-ci
+
+on:
+  pull_request:
+    paths:
+      - 'apps/daemon/**'
+      - 'apps/tui/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig*.json'
+      - 'turbo.json'
+      - '.github/workflows/core-ci.yml'
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'apps/daemon/**'
+      - 'apps/tui/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig*.json'
+      - 'turbo.json'
+      - '.github/workflows/core-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: core-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Typecheck monorepo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  daemon-smoke:
+    name: Daemon smoke API
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FORGE_DAEMON_URL: http://127.0.0.1:4545
+      FORGE_DAEMON_TOKEN: ci-local-token
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Init DB migrations
+        run: pnpm migrate
+
+      - name: Start daemon
+        run: |
+          pnpm dev:daemon > daemon.log 2>&1 &
+          echo $! > daemon.pid
+
+      - name: Wait for health
+        run: |
+          for i in {1..60}; do
+            if curl -sf "$FORGE_DAEMON_URL/health" >/dev/null; then
+              echo "health ok"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "daemon did not become healthy"
+          cat daemon.log || true
+          exit 1
+
+      - name: Run smoke script
+        run: pnpm smoke:daemon
+
+      - name: Stop daemon
+        if: always()
+        run: |
+          if [ -f daemon.pid ]; then
+            kill "$(cat daemon.pid)" >/dev/null 2>&1 || true
+          fi
+
+      - name: Upload daemon log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daemon-log
+          path: daemon.log

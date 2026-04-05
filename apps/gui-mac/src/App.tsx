@@ -22,6 +22,7 @@ export default function App() {
     approvals,
     pendingApprovals,
     settingMap,
+    openAIAuthStatus,
     events,
     streamingText,
     sessionState,
@@ -36,7 +37,10 @@ export default function App() {
     approve,
     reject,
     openProject,
-    updateSetting
+    updateSetting,
+    setOpenAIApiKey,
+    setOpenAIAuthMode,
+    verifyOpenAIApiKey
   } = useForgeDaemon()
 
   const headerModel = `${currentSessionRecord?.provider ?? status?.defaultProvider ?? '-'} / ${
@@ -106,11 +110,15 @@ export default function App() {
       <SettingsScreen
         settingMap={settingMap}
         status={status}
+        openAIAuthStatus={openAIAuthStatus}
         currentSession={currentSessionRecord}
         sessionState={sessionState}
         busy={busy}
         onRefresh={refreshSnapshot}
         onUpdateSetting={updateSetting}
+        onSetOpenAIApiKey={setOpenAIApiKey}
+        onSetOpenAIAuthMode={setOpenAIAuthMode}
+        onVerifyOpenAIApiKey={verifyOpenAIApiKey}
       />
     )
   }, [
@@ -122,6 +130,7 @@ export default function App() {
     currentSessionRecord,
     events,
     openProject,
+    openAIAuthStatus,
     pendingCount,
     projects,
     refreshSnapshot,
@@ -130,12 +139,15 @@ export default function App() {
     sessions,
     sessionState,
     setCurrentSessionById,
+    setOpenAIApiKey,
+    setOpenAIAuthMode,
     settingMap,
     status,
     streamingText,
     createSession,
     submitPrompt,
     updateSetting,
+    verifyOpenAIApiKey,
     view
   ])
 

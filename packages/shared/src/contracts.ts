@@ -132,6 +132,14 @@ export const OpenAIAuthStatusResponseSchema = z.object({
 
 export type OpenAIAuthStatusResponse = z.infer<typeof OpenAIAuthStatusResponseSchema>
 
+export const OpenAIApiKeyVerifyResponseSchema = z.object({
+  ok: z.boolean(),
+  statusCode: z.number().int().nullable(),
+  message: z.string()
+})
+
+export type OpenAIApiKeyVerifyResponse = z.infer<typeof OpenAIApiKeyVerifyResponseSchema>
+
 export const SetOpenAIAuthModeRequestSchema = z.object({
   mode: OpenAIAuthModeSchema
 })

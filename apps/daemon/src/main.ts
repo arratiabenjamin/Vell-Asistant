@@ -8,6 +8,7 @@ import {
   createCodexCliProvider,
   createMockProvider,
   createOpenAICompatibleProvider,
+  verifyOpenAICompatibleApiKey,
   isSafeCommandAllowed,
   listDirTool,
   runCommandSafeTool,
@@ -99,8 +100,8 @@ async function main(): Promise<void> {
   const startedAt = Date.now()
 
   const storage = initializeStorage({
-    dbPath: config.dbPath,
-    logger: getLogger('storage')
+    logger: getLogger('storage'),
+    ...(config.dbPath ? { dbPath: config.dbPath } : {})
   })
 
   let eventId = 0
@@ -278,7 +279,9 @@ async function main(): Promise<void> {
     providers: [
       createMockProvider(),
       createCodexCliProvider(),
-      createOpenAICompatibleProvider({ apiKey: getOpenAIApiKey() })
+      createOpenAICompatibleProvider({
+        ...(getOpenAIApiKey() ? { apiKey: getOpenAIApiKey() } : {})
+      })
     ]
   })
 
@@ -288,7 +291,9 @@ async function main(): Promise<void> {
       providers: [
         createMockProvider(),
         createCodexCliProvider(),
-        createOpenAICompatibleProvider({ apiKey: getOpenAIApiKey() })
+        createOpenAICompatibleProvider({
+          ...(getOpenAIApiKey() ? { apiKey: getOpenAIApiKey() } : {})
+        })
       ]
     })
   }
@@ -562,6 +567,7 @@ async function main(): Promise<void> {
 
   const app = createServer({
     logger,
+    ...(config.authToken ? { authToken: config.authToken } : {}),
     getHealth: (): HealthResponse => {
       const storageHealth = getStorageHealth(storage)
       return {
@@ -672,6 +678,11 @@ async function main(): Promise<void> {
         codexLoggedIn: await isCodexLoggedIn(),
         activeProvider: getActiveOpenAIProviderName()
       }
+    },
+    verifyOpenAIApiKey: async () => {
+      return verifyOpenAICompatibleApiKey({
+        ...(getOpenAIApiKey() ? { apiKey: getOpenAIApiKey() } : {})
+      })
     },
     setOpenAIAuthMode: async input => {
       setSetting(storage, OPENAI_AUTH_MODE_KEY, JSON.stringify(input.mode))

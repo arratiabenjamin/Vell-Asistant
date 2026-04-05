@@ -1,0 +1,71 @@
+name: gui-native-release-macos
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Build profile
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - debug
+
+concurrency:
+  group: gui-native-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-native-artifact:
+    name: Build GUI native artifact (unsigned)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      CI: true
+      FORGE_DAEMON_URL: http://127.0.0.1:4545
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/gui-mac/src-tauri -> target
+
+      - name: Build web assets
+        run: pnpm --filter @forge/gui-mac build:web
+
+      - name: Build Tauri app (unsigned)
+        run: |
+          if [ "${{ github.event.inputs.profile }}" = "debug" ]; then
+            pnpm --filter @forge/gui-mac exec tauri build --debug --ci
+          else
+            pnpm --filter @forge/gui-mac exec tauri build --ci
+          fi
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-native-macos-${{ github.event.inputs.profile }}
+          path: |
+            apps/gui-mac/src-tauri/target/*/bundle/**
+            apps/gui-mac/src-tauri/target/*/forge_gui_mac

@@ -13,6 +13,9 @@
     "doctor:gui": "pnpm --filter @forge/gui-mac doctor:mac",
     "preflight:gui:native": "pnpm --filter @forge/gui-mac preflight:native",
     "setup:gui:rust": "pnpm --filter @forge/gui-mac setup:rust",
+    "smoke:daemon": "pnpm --filter @forge/daemon smoke",
+    "daemon:install:launchd": "pnpm --filter @forge/daemon launchd:install",
+    "daemon:uninstall:launchd": "pnpm --filter @forge/daemon launchd:uninstall",
     "migrate": "pnpm --filter @forge/storage migrate",
     "clean": "turbo run clean && rm -rf node_modules"
   },

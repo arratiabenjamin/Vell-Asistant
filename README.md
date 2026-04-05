@@ -24,6 +24,13 @@ pnpm migrate
 pnpm dev:daemon
 ```
 
+Daemon con token opcional (recomendado):
+
+```bash
+export FORGE_DAEMON_TOKEN="cambiame-por-un-token-local"
+pnpm dev:daemon
+```
+
 Health check:
 
 ```bash
@@ -69,6 +76,9 @@ curl -X POST http://127.0.0.1:4545/providers/openai/auth/api-key \
   -H "content-type: application/json" \
   -d '{"apiKey":"sk-..."}'
 
+# verificar API key guardada
+curl -X POST http://127.0.0.1:4545/providers/openai/auth/api-key/verify
+
 # modo ChatGPT OAuth (requiere sesión activa en Codex CLI)
 codex login --device-auth
 curl -X POST http://127.0.0.1:4545/providers/openai/auth/chatgpt/activate
@@ -106,6 +116,8 @@ pnpm preflight:gui:native
 Checklist completo: `docs/gui-macos-native-checklist.md`
 
 CI nativo GUI: `.github/workflows/gui-native-macos.yml`
+CI core (daemon/tui/packages + smoke): `.github/workflows/core-ci.yml`
+Release GUI nativa (artifact unsigned): `.github/workflows/gui-native-release-macos.yml`
 
 Project context + read tools (Sprint 4):
 
@@ -240,3 +252,35 @@ curl -N http://127.0.0.1:4545/events/stream
 # replay desde id:
 curl -N "http://127.0.0.1:4545/events/stream?since=10"
 ```
+
+## Seguridad de API local (token)
+
+Si definís `FORGE_DAEMON_TOKEN`, todos los endpoints (excepto `/health`) requieren:
+
+- header `x-forge-token: <token>` **o**
+- `Authorization: Bearer <token>`
+
+Ejemplo:
+
+```bash
+curl http://127.0.0.1:4545/status -H "x-forge-token: $FORGE_DAEMON_TOKEN"
+```
+
+Para clientes:
+
+- TUI: `FORGE_DAEMON_TOKEN=... pnpm dev:tui`
+- GUI web/nativa: `VITE_FORGE_DAEMON_TOKEN=... pnpm dev:gui:web` / `pnpm dev:gui`
+
+## Daemon persistente en macOS (launchd)
+
+```bash
+pnpm daemon:install:launchd
+pnpm daemon:uninstall:launchd
+```
+
+Scripts:
+
+- `apps/daemon/scripts/install-launchd-macos.sh`
+- `apps/daemon/scripts/uninstall-launchd-macos.sh`
+
+Guía rápida hardening: `docs/local-hardening.md`

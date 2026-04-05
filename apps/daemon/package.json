@@ -9,6 +9,9 @@
     "dev": "tsx src/main.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke": "node scripts/smoke.mjs",
+    "launchd:install": "bash scripts/install-launchd-macos.sh",
+    "launchd:uninstall": "bash scripts/uninstall-launchd-macos.sh",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {

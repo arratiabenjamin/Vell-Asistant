@@ -89,7 +89,7 @@ function resolveByPrefix<T extends { id: string }>(items: T[], prefix: string): 
   if (exact) return exact
 
   const matches = items.filter(item => item.id.toLowerCase().startsWith(normalized))
-  if (matches.length === 1) return matches[0]
+  if (matches.length === 1) return matches[0] ?? null
   return null
 }
 
@@ -110,7 +110,15 @@ function pushEntry(prev: ActivityEntry[], entry: ActivityEntry): ActivityEntry[]
 
 function App() {
   const { exit } = useApp()
-  const client = useMemo(() => new DaemonClient(process.env.FORGE_DAEMON_URL ?? 'http://127.0.0.1:4545'), [])
+  const client = useMemo(
+    () =>
+      new DaemonClient(process.env.FORGE_DAEMON_URL ?? 'http://127.0.0.1:4545', {
+        ...(process.env.FORGE_DAEMON_TOKEN?.trim()
+          ? { token: process.env.FORGE_DAEMON_TOKEN.trim() }
+          : {})
+      }),
+    []
+  )
 
   const [screen, setScreen] = useState<ScreenId>('session')
   const [connected, setConnected] = useState(false)
@@ -456,6 +464,10 @@ function App() {
 
       if (command === 'set' && rest.length >= 2) {
         const key = rest[0]
+        if (!key) {
+          appendActivity('error', 'Uso /set <key> <json>')
+          return
+        }
         const raw = rest.slice(1).join(' ')
         const parsed = normalizeJsonValue(raw)
         const updated = await client.updateSetting(key, { value: parsed })
@@ -496,6 +508,10 @@ function App() {
 
         if (toolName === 'write_file' && rest.length >= 3) {
           const path = rest[1]
+          if (!path) {
+            appendActivity('error', 'Uso /tool write_file <path> <content>')
+            return
+          }
           const content = rest.slice(2).join(' ')
           const result = await client.runWriteFileTool(sessionId, { path, content })
           appendActivity('tool', `write_file ${path} -> ${result.status}`, sessionId)
@@ -588,7 +604,7 @@ function App() {
       setScreen(prev => {
         const index = SCREEN_ORDER.findIndex(item => item.id === prev)
         const next = (index + 1) % SCREEN_ORDER.length
-        return SCREEN_ORDER[next].id
+        return SCREEN_ORDER[next]?.id ?? prev
       })
       return
     }
@@ -610,7 +626,10 @@ function App() {
 
     if (/^[1-5]$/.test(keyInput) && input.length === 0) {
       const idx = Number.parseInt(keyInput, 10) - 1
-      setScreen(SCREEN_ORDER[idx].id)
+      const target = SCREEN_ORDER[idx]
+      if (target) {
+        setScreen(target.id)
+      }
       return
     }
 

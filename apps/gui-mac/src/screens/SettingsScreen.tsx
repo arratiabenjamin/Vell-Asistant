@@ -1,39 +1,52 @@
 import { useEffect, useState } from 'react'
-import type { DaemonStatusResponse, Session } from '@forge/shared'
+import type { DaemonStatusResponse, OpenAIAuthMode, OpenAIAuthStatusResponse, Session } from '@forge/shared'
 import type { SessionUiState } from '../hooks/useForgeDaemon'
 import { asStringValue } from '../utils'
 
 type SettingsScreenProps = {
   settingMap: Record<string, unknown>
   status: DaemonStatusResponse | null
+  openAIAuthStatus: OpenAIAuthStatusResponse | null
   currentSession: Session | null
   sessionState: SessionUiState
   busy: boolean
   onRefresh: () => Promise<void>
   onUpdateSetting: (key: string, value: unknown) => Promise<void>
+  onSetOpenAIApiKey: (apiKey: string) => Promise<void>
+  onSetOpenAIAuthMode: (mode: OpenAIAuthMode) => Promise<void>
+  onVerifyOpenAIApiKey: () => Promise<{ ok: boolean; statusCode: number | null; message: string }>
 }
 
 const PROVIDER_OPTIONS = ['mock', 'codex', 'openai', 'openai-compatible', 'openai-chatgpt'] as const
 const MODE_OPTIONS = ['standard', 'strict', 'dev-relaxed'] as const
+const OPENAI_AUTH_MODE_OPTIONS: OpenAIAuthMode[] = ['api_key', 'chatgpt_oauth']
 
 export function SettingsScreen({
   settingMap,
   status,
+  openAIAuthStatus,
   currentSession,
   sessionState,
   busy,
   onRefresh,
-  onUpdateSetting
+  onUpdateSetting,
+  onSetOpenAIApiKey,
+  onSetOpenAIAuthMode,
+  onVerifyOpenAIApiKey
 }: SettingsScreenProps) {
   const [policyMode, setPolicyMode] = useState<string>(asStringValue(settingMap['policy.mode'], 'standard'))
   const [defaultProvider, setDefaultProvider] = useState<string>(
     asStringValue(settingMap['default.provider'], status?.defaultProvider ?? 'mock')
   )
+  const [openAIApiKey, setOpenAIApiKey] = useState('')
+  const [openAIAuthMode, setOpenAIAuthMode] = useState<OpenAIAuthMode>(openAIAuthStatus?.mode ?? 'api_key')
+  const [verifyMessage, setVerifyMessage] = useState<string | null>(null)
 
   useEffect(() => {
     setPolicyMode(asStringValue(settingMap['policy.mode'], 'standard'))
     setDefaultProvider(asStringValue(settingMap['default.provider'], status?.defaultProvider ?? 'mock'))
-  }, [settingMap, status?.defaultProvider])
+    setOpenAIAuthMode(openAIAuthStatus?.mode ?? 'api_key')
+  }, [settingMap, status?.defaultProvider, openAIAuthStatus?.mode])
 
   return (
     <section className="screen">
@@ -78,6 +91,66 @@ export function SettingsScreen({
             Guardar provider
           </button>
         </div>
+      </div>
+
+      <div className="card">
+        <h3>OpenAI auth</h3>
+        <p>mode actual: {openAIAuthStatus?.mode ?? '-'}</p>
+        <p>api key configurada: {openAIAuthStatus?.apiKeyConfigured ? 'sí' : 'no'}</p>
+        <p>codex login: {openAIAuthStatus?.codexLoggedIn ? 'sí' : 'no'}</p>
+        <p>provider activo: {openAIAuthStatus?.activeProvider ?? '-'}</p>
+
+        <div className="actions-row wrap">
+          <label>
+            Auth mode
+            <select value={openAIAuthMode} onChange={event => setOpenAIAuthMode(event.target.value as OpenAIAuthMode)}>
+              {OPENAI_AUTH_MODE_OPTIONS.map(option => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button onClick={() => void onSetOpenAIAuthMode(openAIAuthMode)} disabled={busy}>
+            Guardar auth mode
+          </button>
+        </div>
+
+        <div className="actions-row wrap">
+          <label style={{ minWidth: 320 }}>
+            OpenAI API key
+            <input
+              type="password"
+              value={openAIApiKey}
+              placeholder="sk-..."
+              onChange={event => setOpenAIApiKey(event.target.value)}
+              disabled={busy}
+            />
+          </label>
+          <button
+            onClick={() =>
+              void onSetOpenAIApiKey(openAIApiKey).then(() => {
+                setOpenAIApiKey('')
+                setVerifyMessage('API key guardada')
+              })
+            }
+            disabled={busy}
+          >
+            Guardar API key
+          </button>
+          <button
+            onClick={() =>
+              void onVerifyOpenAIApiKey().then(result => {
+                setVerifyMessage(`${result.ok ? '✅' : '❌'} ${result.message}`)
+              })
+            }
+            disabled={busy}
+          >
+            Verificar API key
+          </button>
+        </div>
+
+        {verifyMessage ? <p className="muted">{verifyMessage}</p> : null}
       </div>
 
       <div className="card">

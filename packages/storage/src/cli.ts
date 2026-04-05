@@ -17,7 +17,10 @@ function parseArgs(argv: string[]): { command: string | null; dbPath?: string } 
     }
   }
 
-  return { command, dbPath }
+  return {
+    command,
+    ...(dbPath ? { dbPath } : {})
+  }
 }
 
 function main(): void {
@@ -30,7 +33,10 @@ function main(): void {
   }
 
   const logger = getLogger('storage:cli')
-  const storage = initializeStorage({ dbPath, logger })
+  const storage = initializeStorage({
+    logger,
+    ...(dbPath ? { dbPath } : {})
+  })
   const health = storage.db.prepare('SELECT COUNT(*) AS total FROM schema_migrations').get() as { total: number }
 
   console.log(`✅ SQLite ready at ${storage.dbPath}`)

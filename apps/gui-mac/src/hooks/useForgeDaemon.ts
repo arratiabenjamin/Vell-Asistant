@@ -3,6 +3,9 @@ import type {
   Approval,
   DaemonEvent,
   DaemonStatusResponse,
+  OpenAIApiKeyVerifyResponse,
+  OpenAIAuthMode,
+  OpenAIAuthStatusResponse,
   Project,
   Session,
   SessionDetailResponse,
@@ -35,6 +38,7 @@ export function useForgeDaemon() {
   const [projects, setProjects] = useState<Project[]>([])
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [settings, setSettings] = useState<SettingsResponse>({ items: [] })
+  const [openAIAuthStatus, setOpenAIAuthStatus] = useState<OpenAIAuthStatusResponse | null>(null)
   const [events, setEvents] = useState<DaemonEvent[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [sessionState, setSessionState] = useState<SessionUiState>('idle')
@@ -72,13 +76,15 @@ export function useForgeDaemon() {
 
   const refreshSnapshot = useCallback(async () => {
     try {
-      const [nextStatus, latest, nextSessions, nextProjects, nextApprovals, nextSettings] = await Promise.all([
+      const [nextStatus, latest, nextSessions, nextProjects, nextApprovals, nextSettings, nextOpenAIAuthStatus] =
+        await Promise.all([
         daemonClient.status(),
         daemonClient.getLatestSession(),
         daemonClient.listSessions(),
         daemonClient.listProjects(),
         daemonClient.listApprovals(),
-        daemonClient.listSettings()
+        daemonClient.listSettings(),
+        daemonClient.getOpenAIAuthStatus()
       ])
 
       setConnected(true)
@@ -87,6 +93,7 @@ export function useForgeDaemon() {
       setProjects(nextProjects)
       setApprovals(nextApprovals)
       setSettings(nextSettings)
+      setOpenAIAuthStatus(nextOpenAIAuthStatus)
 
       const selectedId = currentSessionIdRef.current ?? latest.session?.id ?? nextSessions[0]?.id ?? null
       await loadCurrentSession(selectedId)
@@ -123,6 +130,10 @@ export function useForgeDaemon() {
     setSettings(await daemonClient.listSettings())
   }, [])
 
+  const refreshOpenAIAuthStatus = useCallback(async () => {
+    setOpenAIAuthStatus(await daemonClient.getOpenAIAuthStatus())
+  }, [])
+
   useEffect(() => {
     let cancelled = false
 
@@ -154,6 +165,7 @@ export function useForgeDaemon() {
 
             if (event.type.startsWith('settings.')) {
               void refreshSettings()
+              void refreshOpenAIAuthStatus()
               void refreshStatusOnly()
             }
 
@@ -184,6 +196,7 @@ export function useForgeDaemon() {
     refreshProjects,
     refreshSessions,
     refreshSettings,
+    refreshOpenAIAuthStatus,
     refreshSnapshot,
     refreshStatusOnly
   ])
@@ -419,6 +432,65 @@ export function useForgeDaemon() {
     [refreshStatusOnly]
   )
 
+  const setOpenAIApiKey = useCallback(async (apiKey: string) => {
+    const trimmed = apiKey.trim()
+    if (!trimmed) {
+      setError('Ingresá una API key válida')
+      return
+    }
+
+    setBusy(true)
+    setError(null)
+
+    try {
+      await daemonClient.setOpenAIApiKey({ apiKey: trimmed })
+      await refreshOpenAIAuthStatus()
+      await refreshStatusOnly()
+    } catch (settingError) {
+      const message = settingError instanceof Error ? settingError.message : String(settingError)
+      setError(`No pude guardar OpenAI API key: ${message}`)
+    }
+
+    setBusy(false)
+  }, [refreshOpenAIAuthStatus, refreshStatusOnly])
+
+  const setOpenAIAuthMode = useCallback(async (mode: OpenAIAuthMode) => {
+    setBusy(true)
+    setError(null)
+
+    try {
+      await daemonClient.setOpenAIAuthMode(mode)
+      await refreshOpenAIAuthStatus()
+      await refreshStatusOnly()
+    } catch (settingError) {
+      const message = settingError instanceof Error ? settingError.message : String(settingError)
+      setError(`No pude cambiar OpenAI auth mode: ${message}`)
+    }
+
+    setBusy(false)
+  }, [refreshOpenAIAuthStatus, refreshStatusOnly])
+
+  const verifyOpenAIApiKey = useCallback(async (): Promise<OpenAIApiKeyVerifyResponse> => {
+    setBusy(true)
+    setError(null)
+
+    try {
+      const result = await daemonClient.verifyOpenAIApiKey()
+      await refreshOpenAIAuthStatus()
+      return result
+    } catch (verifyError) {
+      const message = verifyError instanceof Error ? verifyError.message : String(verifyError)
+      setError(`No pude verificar OpenAI API key: ${message}`)
+      return {
+        ok: false,
+        statusCode: null,
+        message
+      }
+    } finally {
+      setBusy(false)
+    }
+  }, [refreshOpenAIAuthStatus])
+
   const settingMap = useMemo(() => {
     return settings.items.reduce<Record<string, unknown>>((accumulator, entry: SettingEntry) => {
       accumulator[entry.key] = entry.value
@@ -451,6 +523,7 @@ export function useForgeDaemon() {
     pendingForCurrentSession,
     settings,
     settingMap,
+    openAIAuthStatus,
     events,
     streamingText,
     sessionState,
@@ -465,6 +538,9 @@ export function useForgeDaemon() {
     approve,
     reject,
     openProject,
-    updateSetting
+    updateSetting,
+    setOpenAIApiKey,
+    setOpenAIAuthMode,
+    verifyOpenAIApiKey
   }
 }

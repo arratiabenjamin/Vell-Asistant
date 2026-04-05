@@ -10,5 +10,16 @@ export const resolveDaemonUrl = (): string => {
   return DEFAULT_DAEMON_URL
 }
 
+export const resolveDaemonToken = (): string | undefined => {
+  const candidate = import.meta.env.VITE_FORGE_DAEMON_TOKEN
+  if (typeof candidate === 'string' && candidate.trim().length > 0) {
+    return candidate.trim()
+  }
+  return undefined
+}
+
 export const daemonUrl = resolveDaemonUrl()
-export const daemonClient = new DaemonClient(daemonUrl)
+export const daemonToken = resolveDaemonToken()
+export const daemonClient = new DaemonClient(daemonUrl, {
+  ...(daemonToken ? { token: daemonToken } : {})
+})

@@ -7,6 +7,12 @@ export type OpenAICompatibleProviderOptions = {
   defaultModel?: string
 }
 
+export type OpenAIApiKeyVerificationResult = {
+  ok: boolean
+  statusCode: number | null
+  message: string
+}
+
 async function* parseSSE(
   stream: ReadableStream<Uint8Array>
 ): AsyncGenerator<EngineProviderChunk> {
@@ -90,7 +96,11 @@ export function createOpenAICompatibleProvider(
 
       if (!response.ok) {
         const errorText = await response.text()
-        throw new Error(`OpenAI-compatible request failed (${response.status}): ${errorText}`)
+        const hint =
+          response.status === 401
+            ? ' OpenAI API key inválida o expirada. Verificá con POST /providers/openai/auth/api-key/verify.'
+            : ''
+        throw new Error(`OpenAI-compatible request failed (${response.status}): ${errorText}${hint}`)
       }
 
       if (!response.body) {
@@ -98,6 +108,51 @@ export function createOpenAICompatibleProvider(
       }
 
       yield* parseSSE(response.body)
+    }
+  }
+}
+
+export async function verifyOpenAICompatibleApiKey(
+  options: OpenAICompatibleProviderOptions = {}
+): Promise<OpenAIApiKeyVerificationResult> {
+  const baseUrl = options.baseUrl ?? process.env.FORGE_OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
+  const apiKey = options.apiKey ?? process.env.FORGE_OPENAI_API_KEY
+
+  if (!apiKey?.trim()) {
+    return {
+      ok: false,
+      statusCode: null,
+      message: 'No API key configured'
+    }
+  }
+
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, {
+      method: 'GET',
+      headers: {
+        authorization: `Bearer ${apiKey}`
+      }
+    })
+
+    if (response.ok) {
+      return {
+        ok: true,
+        statusCode: response.status,
+        message: 'API key válida'
+      }
+    }
+
+    const body = await response.text().catch(() => '')
+    return {
+      ok: false,
+      statusCode: response.status,
+      message: `OpenAI verify failed (${response.status}): ${body.slice(0, 300)}`
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: null,
+      message: error instanceof Error ? error.message : String(error)
     }
   }
 }

@@ -40,7 +40,7 @@ export class ProviderEngineRuntime implements EngineRuntime {
     const history: EngineProviderMessage[] = input.history ?? []
     const messages: EngineProviderMessage[] = [...history, { role: 'user', content: input.prompt }]
 
-    for await (const chunk of provider.run({ model: input.model, messages })) {
+    for await (const chunk of provider.run({ messages, ...(input.model ? { model: input.model } : {}) })) {
       if (chunk.type === 'token') {
         yield { type: 'token', value: chunk.value }
         continue

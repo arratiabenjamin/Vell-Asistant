@@ -4,6 +4,7 @@ export type DaemonConfig = {
   host: string
   port: number
   dbPath?: string
+  authToken?: string
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): DaemonConfig {
@@ -16,10 +17,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DaemonConfig {
   }
 
   const dbPath = env.FORGE_DB_PATH?.trim()
+  const authToken = env.FORGE_DAEMON_TOKEN?.trim()
 
   return {
     host,
     port,
-    dbPath: dbPath ? resolve(dbPath) : undefined
+    ...(dbPath ? { dbPath: resolve(dbPath) } : {}),
+    ...(authToken ? { authToken } : {})
   }
 }

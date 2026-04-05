@@ -62,7 +62,14 @@ Variable opcional:
 
 ```bash
 VITE_FORGE_DAEMON_URL=http://127.0.0.1:4545
+VITE_FORGE_DAEMON_TOKEN=tu-token-local
 ```
+
+La pantalla **Settings** permite:
+
+- cambiar `OpenAI auth mode` (`api_key` / `chatgpt_oauth`)
+- guardar `OpenAI API key`
+- verificar API key contra endpoint local `/providers/openai/auth/api-key/verify`
 
 ## Limitaciones actuales
 

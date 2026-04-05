@@ -1,6 +1,6 @@
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
 import type { Logger } from '@forge/observability'
 import {
   ApprovalListResponseSchema,
@@ -13,6 +13,7 @@ import {
   ListDirToolRequestSchema,
   ListDirToolResponseSchema,
   OpenAIAuthStatusResponseSchema,
+  OpenAIApiKeyVerifyResponseSchema,
   ProjectListResponseSchema,
   ProjectContextResponseSchema,
   PromptSessionRequestSchema,
@@ -48,6 +49,7 @@ import {
   type ListDirToolRequest,
   type ListDirToolResponse,
   type OpenAIAuthStatusResponse,
+  type OpenAIApiKeyVerifyResponse,
   type ProjectListResponse,
   type ProjectContextResponse,
   type PromptSessionRequest,
@@ -77,6 +79,7 @@ import {
 
 export type CreateServerOptions = {
   logger: Logger
+  authToken?: string
   getHealth: () => HealthResponse
   getStatus: () => DaemonStatusResponse
   listSessions: () => Session[]
@@ -91,6 +94,7 @@ export type CreateServerOptions = {
     input: PromptSessionRequest
   ) => Promise<AsyncGenerator<PromptStreamEvent> | null>
   getOpenAIAuthStatus: () => Promise<OpenAIAuthStatusResponse>
+  verifyOpenAIApiKey: () => Promise<OpenAIApiKeyVerifyResponse>
   setOpenAIAuthMode: (input: SetOpenAIAuthModeRequest) => Promise<GenericOkResponse>
   setOpenAIApiKey: (input: SetOpenAIApiKeyRequest) => Promise<GenericOkResponse>
   activateOpenAIChatGPTOAuth: () => Promise<GenericOkResponse>
@@ -137,7 +141,7 @@ export type ForgeHttpServer = {
 function applyCorsHeaders(reply: ServerResponse): void {
   reply.setHeader('access-control-allow-origin', '*')
   reply.setHeader('access-control-allow-methods', 'GET,POST,PUT,OPTIONS')
-  reply.setHeader('access-control-allow-headers', 'content-type,x-request-id')
+  reply.setHeader('access-control-allow-headers', 'content-type,x-request-id,x-forge-token,authorization')
 }
 
 function sendJson(reply: ServerResponse, statusCode: number, payload: unknown): void {
@@ -189,7 +193,9 @@ function extractSessionId(pathname: string, suffix = ''): string | null {
 
   const match = pathname.match(pattern)
   if (!match) return null
-  return decodeURIComponent(match[1])
+  const value = match[1]
+  if (!value) return null
+  return decodeURIComponent(value)
 }
 
 function extractApprovalId(pathname: string, suffix = ''): string | null {
@@ -199,22 +205,29 @@ function extractApprovalId(pathname: string, suffix = ''): string | null {
 
   const match = pathname.match(pattern)
   if (!match) return null
-  return decodeURIComponent(match[1])
+  const value = match[1]
+  if (!value) return null
+  return decodeURIComponent(value)
 }
 
 function extractSettingKey(pathname: string): string | null {
   const match = pathname.match(/^\/settings\/(.+)$/)
   if (!match) return null
-  return decodeURIComponent(match[1])
+  const value = match[1]
+  if (!value) return null
+  return decodeURIComponent(value)
 }
 
 function extractSessionSystemAction(pathname: string): { sessionId: string; action: string } | null {
   const match = pathname.match(/^\/sessions\/([^/]+)\/system-actions\/([^/]+)$/)
   if (!match) return null
+  const sessionId = match[1]
+  const action = match[2]
+  if (!sessionId || !action) return null
 
   return {
-    sessionId: decodeURIComponent(match[1]),
-    action: decodeURIComponent(match[2])
+    sessionId: decodeURIComponent(sessionId),
+    action: decodeURIComponent(action)
   }
 }
 
@@ -256,6 +269,29 @@ async function handleRequest(
     applyCorsHeaders(reply)
     reply.end()
     return
+  }
+
+  if (options.authToken && pathname !== '/health') {
+    const providedHeader = request.headers['x-forge-token']
+    const providedBearer = request.headers.authorization?.startsWith('Bearer ')
+      ? request.headers.authorization.slice('Bearer '.length)
+      : undefined
+    const provided =
+      (Array.isArray(providedHeader) ? providedHeader[0] : providedHeader) ?? providedBearer ?? null
+
+    const expected = options.authToken
+    const isValid =
+      typeof provided === 'string' &&
+      provided.length === expected.length &&
+      timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+
+    if (!isValid) {
+      sendJson(reply, 401, {
+        error: 'unauthorized',
+        message: 'Missing or invalid daemon token'
+      })
+      return
+    }
   }
 
   if (method === 'GET' && pathname === '/health') {
@@ -310,6 +346,11 @@ async function handleRequest(
 
   if (method === 'GET' && pathname === '/providers/openai/auth/status') {
     sendJson(reply, 200, OpenAIAuthStatusResponseSchema.parse(await options.getOpenAIAuthStatus()))
+    return
+  }
+
+  if (method === 'POST' && pathname === '/providers/openai/auth/api-key/verify') {
+    sendJson(reply, 200, OpenAIApiKeyVerifyResponseSchema.parse(await options.verifyOpenAIApiKey()))
     return
   }
 

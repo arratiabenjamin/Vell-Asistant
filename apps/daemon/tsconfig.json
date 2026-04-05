@@ -11,6 +11,8 @@
     { "path": "../../packages/control-plane" },
     { "path": "../../packages/engine" },
     { "path": "../../packages/storage" },
-    { "path": "../../packages/observability" }
+    { "path": "../../packages/observability" },
+    { "path": "../../packages/policy" },
+    { "path": "../../packages/system-actions" }
   ]
 }

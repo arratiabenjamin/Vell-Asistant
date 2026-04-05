@@ -106,3 +106,11 @@ Workflow: `.github/workflows/gui-native-macos.yml`
 - Job `debug-build-dry-run` (manual `workflow_dispatch`):
   - build web
   - `tauri build --debug --no-bundle --ci`
+
+## 8) Release artifact nativo (unsigned)
+
+Workflow manual: `.github/workflows/gui-native-release-macos.yml`
+
+- construye bundle nativo macOS en perfil `release` o `debug`
+- sube artifacts de `target/*/bundle/**`
+- **no firma / no notariza** (pendiente de credenciales Apple)

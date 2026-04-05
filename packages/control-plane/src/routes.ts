@@ -4,6 +4,7 @@ export const ROUTES = {
   openaiAuthStatus: '/providers/openai/auth/status',
   openaiAuthMode: '/providers/openai/auth/mode',
   openaiAuthApiKey: '/providers/openai/auth/api-key',
+  openaiAuthApiKeyVerify: '/providers/openai/auth/api-key/verify',
   openaiAuthChatGPTActivate: '/providers/openai/auth/chatgpt/activate',
   sessions: '/sessions',
   sessionsLatest: '/sessions/latest',

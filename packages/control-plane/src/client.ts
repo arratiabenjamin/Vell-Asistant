@@ -9,6 +9,7 @@ import {
   ListDirToolRequestSchema,
   ListDirToolResponseSchema,
   OpenAIAuthStatusResponseSchema,
+  OpenAIApiKeyVerifyResponseSchema,
   ProjectListResponseSchema,
   ProjectContextResponseSchema,
   PromptSessionRequestSchema,
@@ -45,6 +46,7 @@ import {
   type ListDirToolResponse,
   type OpenAIAuthMode,
   type OpenAIAuthStatusResponse,
+  type OpenAIApiKeyVerifyResponse,
   type ProjectListResponse,
   type ProjectContextResponse,
   type PromptSessionRequest,
@@ -73,11 +75,31 @@ import {
 } from '@forge/shared'
 import { ROUTES } from './routes.js'
 
+export type DaemonClientOptions = {
+  token?: string
+}
+
 export class DaemonClient {
-  constructor(private readonly baseUrl: string) {}
+  private readonly authToken: string | null
+
+  constructor(
+    private readonly baseUrl: string,
+    options: DaemonClientOptions = {}
+  ) {
+    this.authToken = options.token?.trim() || null
+  }
+
+  private withAuth(init: RequestInit): RequestInit {
+    const headers = new Headers(init.headers ?? {})
+    if (this.authToken) {
+      headers.set('x-forge-token', this.authToken)
+    }
+
+    return { ...init, headers }
+  }
 
   private async request<T>(path: string, init: RequestInit, parse: (payload: unknown) => T): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, init)
+    const response = await fetch(`${this.baseUrl}${path}`, this.withAuth(init))
     if (!response.ok) {
       throw new Error(`Request failed: ${response.status} ${response.statusText}`)
     }
@@ -131,6 +153,14 @@ export class DaemonClient {
       ROUTES.openaiAuthChatGPTActivate,
       { method: 'POST' },
       body => GenericOkResponseSchema.parse(body)
+    )
+  }
+
+  async verifyOpenAIApiKey(): Promise<OpenAIApiKeyVerifyResponse> {
+    return this.request(
+      ROUTES.openaiAuthApiKeyVerify,
+      { method: 'POST' },
+      body => OpenAIApiKeyVerifyResponseSchema.parse(body)
     )
   }
 
@@ -195,7 +225,7 @@ export class DaemonClient {
     const payload = PromptSessionRequestSchema.parse(input)
     const response = await fetch(`${this.baseUrl}${ROUTES.sessionPromptStream(sessionId)}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: this.withAuth({ headers: { 'content-type': 'application/json' } }).headers,
       body: JSON.stringify(payload)
     })
 
@@ -241,7 +271,7 @@ export class DaemonClient {
       url.searchParams.set('since', String(Math.floor(sinceId)))
     }
 
-    const response = await fetch(url.toString(), { method: 'GET' })
+    const response = await fetch(url.toString(), this.withAuth({ method: 'GET' }))
     if (!response.ok) {
       throw new Error(`Request failed: ${response.status} ${response.statusText}`)
     }
