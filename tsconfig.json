@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/control-plane" },
+    { "path": "./packages/observability" },
+    { "path": "./packages/storage" },
+    { "path": "./packages/policy" },
+    { "path": "./packages/system-actions" },
+    { "path": "./packages/engine" },
+    { "path": "./apps/daemon" },
+    { "path": "./apps/tui" },
+    { "path": "./apps/gui-mac" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "references": [
+    { "path": "../../packages/control-plane" },
+    { "path": "../../packages/observability" }
+  ]
+}

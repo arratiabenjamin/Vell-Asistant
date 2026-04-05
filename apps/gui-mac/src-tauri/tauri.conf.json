@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Forge GUI",
+  "version": "0.1.0",
+  "identifier": "com.forge.gui",
+  "build": {
+    "beforeDevCommand": "pnpm ensure:dist && pnpm dev:web",
+    "beforeBuildCommand": "pnpm build:web",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Forge GUI",
+        "width": 1280,
+        "height": 820,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/icon.png"]
+  }
+}

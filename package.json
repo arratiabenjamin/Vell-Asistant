@@ -1,0 +1,25 @@
+{
+  "name": "forge-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "dev:daemon": "pnpm --filter @forge/daemon dev",
+    "dev:tui": "pnpm --filter @forge/tui dev",
+    "dev:gui:web": "pnpm --filter @forge/gui-mac dev:web",
+    "dev:gui": "pnpm --filter @forge/gui-mac dev",
+    "doctor:gui": "pnpm --filter @forge/gui-mac doctor:mac",
+    "preflight:gui:native": "pnpm --filter @forge/gui-mac preflight:native",
+    "setup:gui:rust": "pnpm --filter @forge/gui-mac setup:rust",
+    "migrate": "pnpm --filter @forge/storage migrate",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.5",
+    "turbo": "^2.5.6",
+    "typescript": "^5.9.3"
+  }
+}

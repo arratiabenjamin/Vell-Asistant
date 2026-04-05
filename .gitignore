@@ -1,0 +1,9 @@
+node_modules
+dist
+*.tsbuildinfo
+.forge
+.DS_Store
+src-tauri/target
+**/src-tauri/target
+.turbo
+tmp

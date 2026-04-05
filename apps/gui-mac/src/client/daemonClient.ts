@@ -1,0 +1,14 @@
+import { DaemonClient } from '@forge/control-plane'
+
+export const DEFAULT_DAEMON_URL = 'http://127.0.0.1:4545'
+
+export const resolveDaemonUrl = (): string => {
+  const candidate = import.meta.env.VITE_FORGE_DAEMON_URL
+  if (typeof candidate === 'string' && candidate.trim().length > 0) {
+    return candidate.trim()
+  }
+  return DEFAULT_DAEMON_URL
+}
+
+export const daemonUrl = resolveDaemonUrl()
+export const daemonClient = new DaemonClient(daemonUrl)

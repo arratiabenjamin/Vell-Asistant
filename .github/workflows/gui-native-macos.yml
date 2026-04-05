@@ -1,0 +1,120 @@
+name: gui-native-macos
+
+on:
+  pull_request:
+    paths:
+      - 'apps/gui-mac/**'
+      - 'packages/control-plane/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig*.json'
+      - '.github/workflows/gui-native-macos.yml'
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'apps/gui-mac/**'
+      - 'packages/control-plane/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig*.json'
+      - '.github/workflows/gui-native-macos.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: gui-native-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight-native:
+    name: Preflight (doctor + typecheck + cargo check)
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      CI: true
+      FORGE_DAEMON_URL: http://127.0.0.1:4545
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/gui-mac/src-tauri -> target
+
+      - name: Ensure dist placeholder
+        run: pnpm --filter @forge/gui-mac ensure:dist
+
+      - name: GUI doctor
+        run: pnpm doctor:gui
+
+      - name: GUI preflight
+        run: pnpm preflight:gui:native
+
+      - name: Cargo check (native shell)
+        working-directory: apps/gui-mac/src-tauri
+        run: cargo check
+
+  debug-build-dry-run:
+    name: Debug build dry-run (manual)
+    runs-on: macos-latest
+    timeout-minutes: 50
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      CI: true
+      FORGE_DAEMON_URL: http://127.0.0.1:4545
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/gui-mac/src-tauri -> target
+
+      - name: Build web assets
+        run: pnpm --filter @forge/gui-mac build:web
+
+      - name: Tauri debug build (no bundle, no sign)
+        run: pnpm --filter @forge/gui-mac exec tauri build --debug --no-bundle --ci

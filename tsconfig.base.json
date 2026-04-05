@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "useUnknownInCatchVariables": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "composite": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@forge/shared": ["packages/shared/src/index.ts"],
+      "@forge/control-plane": ["packages/control-plane/src/index.ts"],
+      "@forge/engine": ["packages/engine/src/index.ts"],
+      "@forge/storage": ["packages/storage/src/index.ts"],
+      "@forge/policy": ["packages/policy/src/index.ts"],
+      "@forge/system-actions": ["packages/system-actions/src/index.ts"],
+      "@forge/observability": ["packages/observability/src/index.ts"]
+    }
+  }
+}
