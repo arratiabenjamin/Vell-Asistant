@@ -1,6 +1,10 @@
 import { getLogger } from '@forge/observability'
 import { evaluateCapability } from '@forge/policy'
-import { executeSystemAction, SYSTEM_ACTIONS } from '@forge/system-actions'
+import {
+  executeSystemAction,
+  SYSTEM_ACTIONS,
+  type SystemActionDefinition
+} from '@forge/system-actions'
 import {
   ProviderEngineRuntime,
   buildProjectContext,
@@ -758,7 +762,8 @@ async function main(): Promise<void> {
       publishEvent('settings.updated', { payload: { key, value: parsed.data.value } })
       return settings
     },
-    listSystemActions: () => SYSTEM_ACTIONS.map(action => ({ ...action })),
+    listSystemActions: () =>
+      SYSTEM_ACTIONS.map((action: SystemActionDefinition) => ({ ...action })),
     invokeSystemAction: async (sessionId, action, input: SystemActionInvokeRequest) => {
       const session = getSessionById(storage, sessionId)
       if (!session) return null

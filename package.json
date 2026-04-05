@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "turbo run build",
-    "typecheck": "pnpm exec tsc -b --pretty false --noEmit",
+    "typecheck": "pnpm -r --sort --if-present typecheck",
     "dev:daemon": "pnpm --filter @forge/daemon dev",
     "dev:tui": "pnpm --filter @forge/tui dev",
     "dev:gui:web": "pnpm --filter @forge/gui-mac dev:web",
