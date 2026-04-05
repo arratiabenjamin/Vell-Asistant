@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "Utility",
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

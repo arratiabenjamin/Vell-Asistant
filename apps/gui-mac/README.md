@@ -54,6 +54,9 @@ pnpm preflight:gui:native
 
 # crea dist placeholder para compile de Tauri dev (si hiciera falta)
 pnpm --filter @forge/gui-mac ensure:dist
+
+# smoke de limpieza para release nativo macOS
+pnpm smoke:gui:mac-clean
 ```
 
 Checklist completo: `docs/gui-macos-native-checklist.md`
@@ -71,8 +74,34 @@ La pantalla **Settings** permite:
 - guardar `OpenAI API key`
 - verificar API key contra endpoint local `/providers/openai/auth/api-key/verify`
 
+## Release macOS
+
+La app nativa usa metadata explícita en `src-tauri/tauri.conf.json` + `src-tauri/tauri.macos.conf.json`.
+
+Workflow manual:
+
+- `.github/workflows/gui-native-release-macos.yml`
+
+Modos:
+
+- `profile=release|debug`
+- `sign=false|true`
+- `notarize=false|true`
+
+Si activás `sign` o `notarize`, el workflow espera secretos Apple y falla con un mensaje claro si faltan:
+
+- `APPLE_CERTIFICATE`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_SIGNING_IDENTITY`
+- `APPLE_API_KEY`
+- `APPLE_API_ISSUER`
+- `APPLE_API_KEY_B64`
+
+Antes de construir, el workflow corre `pnpm smoke:gui:mac-clean` para validar una Mac limpia.
+
 ## Limitaciones actuales
 
 - Es un shell visual austero (no editor avanzado).
 - No incluye audio, voz, hotword ni remoto móvil.
 - El streaming es básico (texto en vivo de la respuesta actual).
+- La firma/notarización quedan para el workflow manual con secretos Apple.

@@ -13,6 +13,7 @@
     "doctor:gui": "pnpm --filter @forge/gui-mac doctor:mac",
     "preflight:gui:native": "pnpm --filter @forge/gui-mac preflight:native",
     "setup:gui:rust": "pnpm --filter @forge/gui-mac setup:rust",
+    "smoke:gui:mac-clean": "pnpm --filter @forge/gui-mac smoke:mac-clean",
     "smoke:daemon": "pnpm --filter @forge/daemon smoke",
     "daemon:install:launchd": "pnpm --filter @forge/daemon launchd:install",
     "daemon:uninstall:launchd": "pnpm --filter @forge/daemon launchd:uninstall",

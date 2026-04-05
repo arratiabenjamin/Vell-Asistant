@@ -11,6 +11,16 @@ on:
         options:
           - release
           - debug
+      sign:
+        description: Code sign with Apple certificates
+        required: true
+        default: false
+        type: boolean
+      notarize:
+        description: Notarize the bundle after signing
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: gui-native-release-${{ github.ref }}
@@ -18,12 +28,18 @@ concurrency:
 
 jobs:
   build-native-artifact:
-    name: Build GUI native artifact (unsigned)
+    name: Build GUI native artifact (optional sign/notarize)
     runs-on: macos-latest
     timeout-minutes: 60
     env:
       CI: true
       FORGE_DAEMON_URL: http://127.0.0.1:4545
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,15 +67,47 @@ jobs:
           workspaces: |
             apps/gui-mac/src-tauri -> target
 
+      - name: Mac clean smoke
+        run: pnpm smoke:gui:mac-clean
+
+      - name: Validate signing inputs
+        if: ${{ github.event.inputs.sign == 'true' || github.event.inputs.notarize == 'true' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event.inputs.notarize }}" = "true" ] && [ "${{ github.event.inputs.sign }}" != "true" ]; then
+            echo "Notarization requires signing. Re-run the workflow with sign=true."
+            exit 1
+          fi
+
+          if [ "${{ github.event.inputs.sign }}" = "true" ]; then
+            : "${APPLE_CERTIFICATE:?Missing APPLE_CERTIFICATE secret}"
+            : "${APPLE_CERTIFICATE_PASSWORD:?Missing APPLE_CERTIFICATE_PASSWORD secret}"
+          fi
+
+          if [ "${{ github.event.inputs.notarize }}" = "true" ]; then
+            : "${APPLE_API_KEY:?Missing APPLE_API_KEY secret}"
+            : "${APPLE_API_ISSUER:?Missing APPLE_API_ISSUER secret}"
+            : "${APPLE_API_KEY_B64:?Missing APPLE_API_KEY_B64 secret}"
+          fi
+
+      - name: Prepare App Store Connect API key
+        if: ${{ github.event.inputs.notarize == 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/apple-api
+          printf '%s' "$APPLE_API_KEY_B64" | base64 --decode > ".tmp/apple-api/AuthKey_${APPLE_API_KEY}.p8"
+          echo "APPLE_API_KEY_PATH=$GITHUB_WORKSPACE/.tmp/apple-api/AuthKey_${APPLE_API_KEY}.p8" >> "$GITHUB_ENV"
+
       - name: Build web assets
         run: pnpm --filter @forge/gui-mac build:web
 
-      - name: Build Tauri app (unsigned)
+      - name: Build Tauri app
         run: |
           if [ "${{ github.event.inputs.profile }}" = "debug" ]; then
-            pnpm --filter @forge/gui-mac exec tauri build --debug --ci
+            pnpm --filter @forge/gui-mac exec tauri build --debug --bundles app,dmg --ci
           else
-            pnpm --filter @forge/gui-mac exec tauri build --ci
+            pnpm --filter @forge/gui-mac exec tauri build --bundles app,dmg --ci
           fi
 
       - name: Upload bundle artifacts

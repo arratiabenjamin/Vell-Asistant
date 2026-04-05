@@ -90,8 +90,9 @@ Checks:
 
 - [ ] firma de app (Apple Developer)
 - [ ] notarización
-- [ ] metadatos finales de bundle (ícono, nombre, versión release)
-- [ ] smoke final en Mac limpia
+- [x] metadatos de bundle macOS versionados en `apps/gui-mac/src-tauri/tauri.conf.json` + `apps/gui-mac/src-tauri/tauri.macos.conf.json`
+- [x] smoke final para Mac limpia: `pnpm smoke:gui:mac-clean`
+- [ ] secretos Apple cargados en GitHub Actions para `gui-native-release-macos`
 
 ## 7) CI nativo (GitHub Actions)
 
@@ -113,4 +114,14 @@ Workflow manual: `.github/workflows/gui-native-release-macos.yml`
 
 - construye bundle nativo macOS en perfil `release` o `debug`
 - sube artifacts de `target/*/bundle/**`
-- **no firma / no notariza** (pendiente de credenciales Apple)
+- soporta `sign=false|true` y `notarize=false|true`
+- si activás `sign` o `notarize`, falla temprano si faltan secretos Apple
+
+Secretos esperados por el workflow:
+
+- `APPLE_CERTIFICATE`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_SIGNING_IDENTITY`
+- `APPLE_API_KEY`
+- `APPLE_API_ISSUER`
+- `APPLE_API_KEY_B64`

@@ -114,10 +114,13 @@ pnpm preflight:gui:native
 ```
 
 Checklist completo: `docs/gui-macos-native-checklist.md`
+Smoke de limpieza para release nativo: `pnpm smoke:gui:mac-clean`
 
 CI nativo GUI: `.github/workflows/gui-native-macos.yml`
 CI core (daemon/tui/packages + smoke): `.github/workflows/core-ci.yml`
-Release GUI nativa (artifact unsigned): `.github/workflows/gui-native-release-macos.yml`
+Release GUI nativa manual (unsigned o signed/notarized opcional): `.github/workflows/gui-native-release-macos.yml`
+
+Para el flujo firmado/notarizado se usan secretos Apple y el workflow falla temprano si faltan.
 
 Project context + read tools (Sprint 4):
 

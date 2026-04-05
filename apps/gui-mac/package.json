@@ -10,6 +10,7 @@
     "build:web": "vite build",
     "preview": "vite preview --port 1420 --strictPort",
     "doctor:mac": "tsx scripts/doctor-macos.ts",
+    "smoke:mac-clean": "tsx scripts/smoke-clean-macos.ts",
     "setup:rust": "bash scripts/setup-rust-macos.sh",
     "preflight:native": "pnpm doctor:mac && pnpm typecheck",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
