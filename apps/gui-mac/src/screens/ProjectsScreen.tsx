@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Project, Session } from '@forge/shared'
 import { formatDateTime, shortId, truncate } from '../utils'
+import { Badge, EmptyState } from '../components/ui'
 
 type ProjectsScreenProps = {
   projects: Project[]
@@ -22,8 +23,12 @@ export function ProjectsScreen({
   return (
     <section className="screen">
       <div className="section-header">
-        <h2>Projects</h2>
-        <div className="actions-row">
+        <div>
+          <h2>Projects</h2>
+          <p className="muted">Seleccioná contexto de trabajo para la sesión actual o una sesión nueva.</p>
+        </div>
+        <div className="actions-row wrap">
+          <Badge tone="info">{projects.length} recent</Badge>
           <button onClick={() => void onRefresh()} disabled={busy}>
             Refresh
           </button>
@@ -32,7 +37,8 @@ export function ProjectsScreen({
 
       <div className="card">
         <p>
-          <strong>Current session:</strong> {currentSession ? `${shortId(currentSession.id)} · ${currentSession.title ?? '(sin título)'}` : 'none'}
+          <strong>Current session:</strong>{' '}
+          {currentSession ? `${shortId(currentSession.id)} · ${currentSession.title ?? '(sin título)'}` : 'none'}
         </p>
         <p>
           <strong>Current project:</strong> {currentSession?.projectPath ?? '(sin proyecto)'}
@@ -73,19 +79,20 @@ export function ProjectsScreen({
 
       <h3>Proyectos recientes</h3>
       {projects.length === 0 ? (
-        <div className="card">
-          <p className="muted">No hay proyectos recientes.</p>
-        </div>
+        <EmptyState title="No hay proyectos recientes" description="Abrí uno para empezar a construir historial." />
       ) : (
         <div className="list-stack">
           {projects.map(project => (
             <article key={project.id} className="card">
-              <p>
-                <strong>{project.name}</strong>
-              </p>
+              <div className="card-title-row wrap">
+                <p>
+                  <strong>{project.name}</strong>
+                </p>
+                <Badge tone="neutral">{shortId(project.id)}</Badge>
+              </div>
               <p className="muted">{truncate(project.path, 160)}</p>
               <p className="muted">last opened: {formatDateTime(project.lastOpenedAt)}</p>
-              <div className="actions-row">
+              <div className="actions-row wrap">
                 <button onClick={() => void onOpenProject(project.path, 'current')} disabled={busy}>
                   Usar en sesión actual
                 </button>

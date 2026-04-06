@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  Approval,
-  DaemonEvent,
-  DaemonStatusResponse,
-  OpenAIApiKeyVerifyResponse,
-  OpenAIAuthMode,
-  OpenAIAuthStatusResponse,
-  Project,
-  Session,
-  SessionDetailResponse,
-  SettingEntry,
-  SettingsResponse
+import {
+  AgentRunSnapshotSchema,
+  type AgentRunSnapshot,
+  type Approval,
+  type DaemonEvent,
+  type DaemonStatusResponse,
+  type OpenAIApiKeyVerifyResponse,
+  type OpenAIAuthMode,
+  type OpenAIAuthStatusResponse,
+  type Project,
+  type Session,
+  type SessionDetailResponse,
+  type SettingEntry,
+  type SettingsResponse
 } from '@forge/shared'
 import { daemonClient, daemonUrl } from '../client/daemonClient'
 
@@ -29,6 +31,16 @@ function pathBasename(projectPath: string): string {
   return chunks[chunks.length - 1] ?? projectPath
 }
 
+function parseAgentSnapshotFromPayload(payload: unknown): AgentRunSnapshot | null {
+  const candidate =
+    payload && typeof payload === 'object' && 'snapshot' in payload
+      ? (payload as { snapshot?: unknown }).snapshot
+      : payload
+
+  const parsed = AgentRunSnapshotSchema.safeParse(candidate)
+  return parsed.success ? parsed.data : null
+}
+
 export function useForgeDaemon() {
   const [connected, setConnected] = useState(false)
   const [status, setStatus] = useState<DaemonStatusResponse | null>(null)
@@ -40,6 +52,7 @@ export function useForgeDaemon() {
   const [settings, setSettings] = useState<SettingsResponse>({ items: [] })
   const [openAIAuthStatus, setOpenAIAuthStatus] = useState<OpenAIAuthStatusResponse | null>(null)
   const [events, setEvents] = useState<DaemonEvent[]>([])
+  const [agentSnapshots, setAgentSnapshots] = useState<Record<string, AgentRunSnapshot>>({})
   const [streamingText, setStreamingText] = useState('')
   const [sessionState, setSessionState] = useState<SessionUiState>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -74,18 +87,34 @@ export function useForgeDaemon() {
     }
   }, [])
 
+  const refreshSessionAgentActivity = useCallback(async (sessionId: string | null) => {
+    if (!sessionId) return
+
+    try {
+      const activity = await daemonClient.getSessionAgentActivity(sessionId)
+      const snapshot = activity.snapshot
+      if (!snapshot) return
+      setAgentSnapshots(previous => ({
+        ...previous,
+        [sessionId]: snapshot
+      }))
+    } catch {
+      // optional for backward compatibility
+    }
+  }, [])
+
   const refreshSnapshot = useCallback(async () => {
     try {
       const [nextStatus, latest, nextSessions, nextProjects, nextApprovals, nextSettings, nextOpenAIAuthStatus] =
         await Promise.all([
-        daemonClient.status(),
-        daemonClient.getLatestSession(),
-        daemonClient.listSessions(),
-        daemonClient.listProjects(),
-        daemonClient.listApprovals(),
-        daemonClient.listSettings(),
-        daemonClient.getOpenAIAuthStatus()
-      ])
+          daemonClient.status(),
+          daemonClient.getLatestSession(),
+          daemonClient.listSessions(),
+          daemonClient.listProjects(),
+          daemonClient.listApprovals(),
+          daemonClient.listSettings(),
+          daemonClient.getOpenAIAuthStatus()
+        ])
 
       setConnected(true)
       setStatus(nextStatus)
@@ -97,12 +126,13 @@ export function useForgeDaemon() {
 
       const selectedId = currentSessionIdRef.current ?? latest.session?.id ?? nextSessions[0]?.id ?? null
       await loadCurrentSession(selectedId)
+      await refreshSessionAgentActivity(selectedId)
     } catch (refreshError) {
       const message = refreshError instanceof Error ? refreshError.message : String(refreshError)
       setConnected(false)
       setError(`No pude conectar al daemon (${daemonUrl}): ${message}`)
     }
-  }, [loadCurrentSession])
+  }, [loadCurrentSession, refreshSessionAgentActivity])
 
   const refreshStatusOnly = useCallback(async () => {
     try {
@@ -169,6 +199,19 @@ export function useForgeDaemon() {
               void refreshStatusOnly()
             }
 
+            if (event.type.startsWith('agent.')) {
+              const parsedSnapshot = parseAgentSnapshotFromPayload(event.payload)
+              if (parsedSnapshot) {
+                setAgentSnapshots(previous => ({
+                  ...previous,
+                  [parsedSnapshot.sessionId]: parsedSnapshot
+                }))
+              } else {
+                void refreshSessionAgentActivity(event.sessionId ?? currentSessionIdRef.current)
+              }
+              void refreshStatusOnly()
+            }
+
             if (event.type.startsWith('daemon.')) {
               void refreshStatusOnly()
             }
@@ -197,6 +240,7 @@ export function useForgeDaemon() {
     refreshSessions,
     refreshSettings,
     refreshOpenAIAuthStatus,
+    refreshSessionAgentActivity,
     refreshSnapshot,
     refreshStatusOnly
   ])
@@ -204,19 +248,26 @@ export function useForgeDaemon() {
   const pendingApprovals = useMemo(() => approvals.filter(item => item.status === 'pending'), [approvals])
 
   const currentSessionRecord = currentSession?.session ?? null
+  const currentSessionAgentActivity = currentSessionRecord ? agentSnapshots[currentSessionRecord.id] ?? null : null
 
   const pendingForCurrentSession = useMemo(() => {
     if (!currentSessionRecord?.id) return 0
     return pendingApprovals.filter(item => item.sessionId === currentSessionRecord.id).length
   }, [currentSessionRecord?.id, pendingApprovals])
 
+  const activeAgentRuns = useMemo(
+    () => Object.values(agentSnapshots).filter(snapshot => snapshot.status === 'running').length,
+    [agentSnapshots]
+  )
+
   const setCurrentSessionById = useCallback(
     async (sessionId: string) => {
       await loadCurrentSession(sessionId)
+      await refreshSessionAgentActivity(sessionId)
       setSessionState('idle')
       setError(null)
     },
-    [loadCurrentSession]
+    [loadCurrentSession, refreshSessionAgentActivity]
   )
 
   const ensureCurrentSession = useCallback(async (): Promise<Session> => {
@@ -229,9 +280,17 @@ export function useForgeDaemon() {
 
     await refreshSessions()
     await loadCurrentSession(created.id)
+    await refreshSessionAgentActivity(created.id)
     await refreshStatusOnly()
     return created
-  }, [currentSessionRecord, loadCurrentSession, refreshSessions, refreshStatusOnly, status?.defaultProvider])
+  }, [
+    currentSessionRecord,
+    loadCurrentSession,
+    refreshSessionAgentActivity,
+    refreshSessions,
+    refreshStatusOnly,
+    status?.defaultProvider
+  ])
 
   const submitPrompt = useCallback(
     async (content: string) => {
@@ -259,6 +318,7 @@ export function useForgeDaemon() {
           if (event.type === 'done') {
             setStreamingText('')
             await loadCurrentSession(session.id)
+            await refreshSessionAgentActivity(session.id)
             await refreshSessions()
             await refreshStatusOnly()
           }
@@ -285,6 +345,7 @@ export function useForgeDaemon() {
       loadCurrentSession,
       pendingForCurrentSession,
       refreshApprovals,
+      refreshSessionAgentActivity,
       refreshSessions,
       refreshStatusOnly
     ]
@@ -302,6 +363,7 @@ export function useForgeDaemon() {
       }
 
       await loadCurrentSession(latest.session.id)
+      await refreshSessionAgentActivity(latest.session.id)
       await refreshSessions()
       await refreshStatusOnly()
     } catch (resumeError) {
@@ -310,7 +372,7 @@ export function useForgeDaemon() {
     }
 
     setBusy(false)
-  }, [loadCurrentSession, refreshSessions, refreshStatusOnly])
+  }, [loadCurrentSession, refreshSessionAgentActivity, refreshSessions, refreshStatusOnly])
 
   const createSession = useCallback(
     async (title?: string) => {
@@ -324,6 +386,7 @@ export function useForgeDaemon() {
         })
         await refreshSessions()
         await loadCurrentSession(created.id)
+        await refreshSessionAgentActivity(created.id)
         await refreshStatusOnly()
       } catch (createError) {
         const message = createError instanceof Error ? createError.message : String(createError)
@@ -332,7 +395,7 @@ export function useForgeDaemon() {
 
       setBusy(false)
     },
-    [loadCurrentSession, refreshSessions, refreshStatusOnly, status?.defaultProvider]
+    [loadCurrentSession, refreshSessionAgentActivity, refreshSessions, refreshStatusOnly, status?.defaultProvider]
   )
 
   const approve = useCallback(
@@ -346,6 +409,7 @@ export function useForgeDaemon() {
         await refreshStatusOnly()
         if (currentSessionIdRef.current) {
           await loadCurrentSession(currentSessionIdRef.current)
+          await refreshSessionAgentActivity(currentSessionIdRef.current)
         }
       } catch (approvalError) {
         const message = approvalError instanceof Error ? approvalError.message : String(approvalError)
@@ -354,7 +418,7 @@ export function useForgeDaemon() {
 
       setBusy(false)
     },
-    [loadCurrentSession, refreshApprovals, refreshStatusOnly]
+    [loadCurrentSession, refreshApprovals, refreshSessionAgentActivity, refreshStatusOnly]
   )
 
   const reject = useCallback(
@@ -393,6 +457,7 @@ export function useForgeDaemon() {
 
         await daemonClient.selectSessionProject(session.id, { projectPath })
         await loadCurrentSession(session.id)
+        await refreshSessionAgentActivity(session.id)
         await refreshSessions()
         await refreshProjects()
         await refreshStatusOnly()
@@ -407,6 +472,7 @@ export function useForgeDaemon() {
       currentSessionRecord,
       loadCurrentSession,
       refreshProjects,
+      refreshSessionAgentActivity,
       refreshSessions,
       refreshStatusOnly,
       status?.defaultProvider
@@ -432,43 +498,49 @@ export function useForgeDaemon() {
     [refreshStatusOnly]
   )
 
-  const setOpenAIApiKey = useCallback(async (apiKey: string) => {
-    const trimmed = apiKey.trim()
-    if (!trimmed) {
-      setError('Ingresá una API key válida')
-      return
-    }
+  const setOpenAIApiKey = useCallback(
+    async (apiKey: string) => {
+      const trimmed = apiKey.trim()
+      if (!trimmed) {
+        setError('Ingresá una API key válida')
+        return
+      }
 
-    setBusy(true)
-    setError(null)
+      setBusy(true)
+      setError(null)
 
-    try {
-      await daemonClient.setOpenAIApiKey({ apiKey: trimmed })
-      await refreshOpenAIAuthStatus()
-      await refreshStatusOnly()
-    } catch (settingError) {
-      const message = settingError instanceof Error ? settingError.message : String(settingError)
-      setError(`No pude guardar OpenAI API key: ${message}`)
-    }
+      try {
+        await daemonClient.setOpenAIApiKey({ apiKey: trimmed })
+        await refreshOpenAIAuthStatus()
+        await refreshStatusOnly()
+      } catch (settingError) {
+        const message = settingError instanceof Error ? settingError.message : String(settingError)
+        setError(`No pude guardar OpenAI API key: ${message}`)
+      }
 
-    setBusy(false)
-  }, [refreshOpenAIAuthStatus, refreshStatusOnly])
+      setBusy(false)
+    },
+    [refreshOpenAIAuthStatus, refreshStatusOnly]
+  )
 
-  const setOpenAIAuthMode = useCallback(async (mode: OpenAIAuthMode) => {
-    setBusy(true)
-    setError(null)
+  const setOpenAIAuthMode = useCallback(
+    async (mode: OpenAIAuthMode) => {
+      setBusy(true)
+      setError(null)
 
-    try {
-      await daemonClient.setOpenAIAuthMode(mode)
-      await refreshOpenAIAuthStatus()
-      await refreshStatusOnly()
-    } catch (settingError) {
-      const message = settingError instanceof Error ? settingError.message : String(settingError)
-      setError(`No pude cambiar OpenAI auth mode: ${message}`)
-    }
+      try {
+        await daemonClient.setOpenAIAuthMode(mode)
+        await refreshOpenAIAuthStatus()
+        await refreshStatusOnly()
+      } catch (settingError) {
+        const message = settingError instanceof Error ? settingError.message : String(settingError)
+        setError(`No pude cambiar OpenAI auth mode: ${message}`)
+      }
 
-    setBusy(false)
-  }, [refreshOpenAIAuthStatus, refreshStatusOnly])
+      setBusy(false)
+    },
+    [refreshOpenAIAuthStatus, refreshStatusOnly]
+  )
 
   const verifyOpenAIApiKey = useCallback(async (): Promise<OpenAIApiKeyVerifyResponse> => {
     setBusy(true)
@@ -504,10 +576,14 @@ export function useForgeDaemon() {
       setSessionState('waiting_approval')
       return
     }
+    if (currentSessionAgentActivity?.status === 'running') {
+      setSessionState('thinking')
+      return
+    }
     if (!busy) {
       setSessionState('idle')
     }
-  }, [busy, pendingForCurrentSession, sessionState])
+  }, [busy, currentSessionAgentActivity?.status, pendingForCurrentSession, sessionState])
 
   return {
     daemonUrl,
@@ -525,12 +601,16 @@ export function useForgeDaemon() {
     settingMap,
     openAIAuthStatus,
     events,
+    agentSnapshots,
+    currentSessionAgentActivity,
+    activeAgentRuns,
     streamingText,
     sessionState,
     error,
     busy,
     clearError,
     refreshSnapshot,
+    refreshSessionAgentActivity,
     setCurrentSessionById,
     resumeLatestSession,
     createSession,

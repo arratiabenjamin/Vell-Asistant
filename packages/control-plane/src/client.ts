@@ -1,6 +1,7 @@
 import {
   ApprovalListResponseSchema,
   ApprovalResolutionResponseSchema,
+  AgentRunResponseSchema,
   CreateSessionRequestSchema,
   DaemonEventSchema,
   DaemonStatusResponseSchema,
@@ -37,6 +38,7 @@ import {
   UpdateSettingRequestSchema,
   type ApprovalListResponse,
   type ApprovalResolutionResponse,
+  type AgentRunResponse,
   type CreateSessionRequest,
   type DaemonEvent,
   type DaemonStatusResponse,
@@ -196,6 +198,12 @@ export class DaemonClient {
   async getSession(sessionId: string): Promise<SessionDetailResponse> {
     return this.request(ROUTES.sessionById(sessionId), { method: 'GET' }, payload =>
       SessionDetailResponseSchema.parse(payload)
+    )
+  }
+
+  async getSessionAgentActivity(sessionId: string): Promise<AgentRunResponse> {
+    return this.request(ROUTES.sessionAgentActivity(sessionId), { method: 'GET' }, payload =>
+      AgentRunResponseSchema.parse(payload)
     )
   }
 

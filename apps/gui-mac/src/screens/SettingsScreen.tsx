@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { DaemonStatusResponse, OpenAIAuthMode, OpenAIAuthStatusResponse, Session } from '@forge/shared'
 import type { SessionUiState } from '../hooks/useForgeDaemon'
 import { asStringValue } from '../utils'
+import { Badge } from '../components/ui'
 
 type SettingsScreenProps = {
   settingMap: Record<string, unknown>
@@ -51,8 +52,12 @@ export function SettingsScreen({
   return (
     <section className="screen">
       <div className="section-header">
-        <h2>Settings</h2>
-        <div className="actions-row">
+        <div>
+          <h2>Settings</h2>
+          <p className="muted">Configuración local de runtime, provider y seguridad.</p>
+        </div>
+        <div className="actions-row wrap">
+          <Badge tone="info">session: {sessionState}</Badge>
           <button onClick={() => void onRefresh()} disabled={busy}>
             Refresh
           </button>
@@ -64,6 +69,7 @@ export function SettingsScreen({
         <p>status: {status?.status ?? '-'}</p>
         <p>event subscribers: {status?.eventSubscribers ?? '-'}</p>
         <p>active sessions: {status?.activeSessions ?? '-'}</p>
+        <p>active agent runs: {status?.activeAgentRuns ?? 0}</p>
       </div>
 
       <div className="card">
@@ -155,7 +161,6 @@ export function SettingsScreen({
 
       <div className="card">
         <h3>Permission mode</h3>
-        <p>session state: {sessionState}</p>
         <div className="actions-row wrap">
           <label>
             Policy mode

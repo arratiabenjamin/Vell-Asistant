@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Sidebar, type ViewId } from './components/Sidebar'
 import { useForgeDaemon } from './hooks/useForgeDaemon'
+import { AgentsScreen } from './screens/AgentsScreen'
 import { ApprovalsScreen } from './screens/ApprovalsScreen'
 import { CurrentSessionScreen } from './screens/CurrentSessionScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { shortId, truncate } from './utils'
+
+function statusClass(connected: boolean): string {
+  return connected ? 'badge ok' : 'badge error'
+}
 
 export default function App() {
   const [view, setView] = useState<ViewId>('dashboard')
@@ -24,6 +29,8 @@ export default function App() {
     settingMap,
     openAIAuthStatus,
     events,
+    currentSessionAgentActivity,
+    activeAgentRuns,
     streamingText,
     sessionState,
     error,
@@ -56,10 +63,12 @@ export default function App() {
           connected={connected}
           status={status}
           currentSession={currentSessionRecord}
+          currentAgentActivity={currentSessionAgentActivity}
           pendingApprovals={pendingCount}
           onOpenSession={() => setView('session')}
           onOpenApprovals={() => setView('approvals')}
           onOpenProjects={() => setView('projects')}
+          onOpenAgents={() => setView('agents')}
         />
       )
     }
@@ -73,10 +82,24 @@ export default function App() {
           busy={busy}
           sessionState={sessionState}
           events={events}
+          agentActivity={currentSessionAgentActivity}
           onCreateSession={createSession}
           onSwitchSession={setCurrentSessionById}
           onSubmitPrompt={submitPrompt}
           onResumeLatest={resumeLatestSession}
+          onRefresh={refreshSnapshot}
+          onOpenAgents={() => setView('agents')}
+        />
+      )
+    }
+
+    if (view === 'agents') {
+      return (
+        <AgentsScreen
+          currentSession={currentSessionRecord}
+          snapshot={currentSessionAgentActivity}
+          activeAgentRuns={activeAgentRuns}
+          busy={busy}
           onRefresh={refreshSnapshot}
         />
       )
@@ -122,11 +145,14 @@ export default function App() {
       />
     )
   }, [
+    activeAgentRuns,
     approvals,
     approve,
     busy,
     connected,
+    createSession,
     currentSession,
+    currentSessionAgentActivity,
     currentSessionRecord,
     events,
     openProject,
@@ -144,7 +170,6 @@ export default function App() {
     settingMap,
     status,
     streamingText,
-    createSession,
     submitPrompt,
     updateSetting,
     verifyOpenAIApiKey,
@@ -156,31 +181,36 @@ export default function App() {
       <Sidebar current={view} onChange={setView} />
 
       <main className="main-area">
-        <header className="top-header">
+        <header className="top-header vell-header">
           <div>
+            <p className="muted">Daemon</p>
             <p>
-              Daemon: <strong className={connected ? 'ok' : 'error'}>{connected ? 'online' : 'offline'}</strong>
+              <span className={statusClass(connected)}>{connected ? 'online' : 'offline'}</span>
             </p>
             <p className="muted">{daemonUrl}</p>
           </div>
 
           <div>
+            <p className="muted">Session</p>
             <p>
-              Session: <strong>{shortId(currentSessionRecord?.id)}</strong>
+              <strong>{shortId(currentSessionRecord?.id)}</strong>
             </p>
             <p className="muted">{currentSessionRecord?.title ?? '(sin sesión activa)'}</p>
           </div>
 
           <div>
+            <p className="muted">Project</p>
             <p>
-              Project: <strong>{truncate(currentSessionRecord?.projectPath ?? '(sin proyecto)', 56)}</strong>
+              <strong>{truncate(currentSessionRecord?.projectPath ?? '(sin proyecto)', 56)}</strong>
             </p>
             <p className="muted">Model: {headerModel}</p>
           </div>
 
           <div>
+            <p className="muted">Approvals / Agents</p>
             <p>
-              Pending approvals: <strong className={pendingCount > 0 ? 'warn' : 'ok'}>{pendingCount}</strong>
+              <span className={`badge ${pendingCount > 0 ? 'warn' : 'ok'}`}>approvals: {pendingCount}</span>
+              <span className={`badge ${activeAgentRuns > 0 ? 'warn' : 'ok'}`}>agents: {activeAgentRuns}</span>
             </p>
             <p className="muted">Mode: {status?.currentMode ?? '-'}</p>
           </div>

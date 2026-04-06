@@ -5,6 +5,7 @@ import type { Logger } from '@forge/observability'
 import {
   ApprovalListResponseSchema,
   ApprovalResolutionResponseSchema,
+  AgentRunResponseSchema,
   CreateSessionRequestSchema,
   DaemonEventSchema,
   DaemonStatusResponseSchema,
@@ -41,6 +42,7 @@ import {
   WriteFileToolRequestSchema,
   type Approval,
   type ApprovalResolutionResponse,
+  type AgentRunResponse,
   type CreateSessionRequest,
   type DaemonStatusResponse,
   type DaemonEvent,
@@ -87,6 +89,7 @@ export type CreateServerOptions = {
   resumeLatestSession: () => LatestSessionResponse
   createSession: (input: CreateSessionRequest) => Session
   getSessionDetail: (sessionId: string) => SessionDetailResponse | null
+  getSessionAgentActivity: (sessionId: string) => AgentRunResponse | null
   resumeSession: (sessionId: string) => Session | null
   promptSession: (sessionId: string, input: PromptSessionRequest) => Promise<PromptSessionResponse | null>
   promptSessionStream: (
@@ -416,6 +419,18 @@ async function handleRequest(
     }
 
     sendJson(reply, 200, SessionDetailResponseSchema.parse(detail))
+    return
+  }
+
+  const sessionAgentActivityId = extractSessionId(pathname, 'agents/activity')
+  if (method === 'GET' && sessionAgentActivityId) {
+    const activity = options.getSessionAgentActivity(sessionAgentActivityId)
+    if (!activity) {
+      sendJson(reply, 404, { error: 'not_found', message: 'Session not found' })
+      return
+    }
+
+    sendJson(reply, 200, AgentRunResponseSchema.parse(activity))
     return
   }
 

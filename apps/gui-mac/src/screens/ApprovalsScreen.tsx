@@ -1,5 +1,6 @@
 import type { Approval } from '@forge/shared'
 import { formatDateTime, shortId, summarizeUnknown } from '../utils'
+import { Badge, EmptyState } from '../components/ui'
 
 type ApprovalsScreenProps = {
   approvals: Approval[]
@@ -15,35 +16,37 @@ export function ApprovalsScreen({ approvals, busy, onApprove, onReject, onRefres
   return (
     <section className="screen">
       <div className="section-header">
-        <h2>Approvals</h2>
-        <div className="actions-row">
+        <div>
+          <h2>Approvals</h2>
+          <p className="muted">Acciones sensibles pendientes de confirmación.</p>
+        </div>
+        <div className="actions-row wrap">
+          <Badge tone={pending.length > 0 ? 'warning' : 'success'}>{pending.length} pending</Badge>
           <button onClick={() => void onRefresh()} disabled={busy}>
             Refresh
           </button>
         </div>
       </div>
 
-      <p className="muted">
-        Pendientes: <strong>{pending.length}</strong> · Totales: <strong>{approvals.length}</strong>
-      </p>
-
       {pending.length === 0 ? (
-        <div className="card">
-          <p className="muted">No hay approvals pendientes.</p>
-        </div>
+        <EmptyState title="Todo al día" description="No hay approvals pendientes." />
       ) : (
         <div className="list-stack">
           {pending.map(approval => (
             <article key={approval.id} className="card">
-              <p>
-                <strong>{approval.name}</strong> · {approval.kind}
-              </p>
+              <div className="card-title-row wrap">
+                <p>
+                  <strong>{approval.name}</strong> · {approval.kind}
+                </p>
+                <Badge tone="warning">pending</Badge>
+              </div>
+
               <p className="muted">
                 id {shortId(approval.id)} · session {shortId(approval.sessionId)} · {formatDateTime(approval.createdAt)}
               </p>
               <p className="muted">payload: {summarizeUnknown(approval.payload, 260)}</p>
 
-              <div className="actions-row">
+              <div className="actions-row wrap">
                 <button onClick={() => void onApprove(approval.id)} disabled={busy}>
                   Approve
                 </button>

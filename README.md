@@ -105,6 +105,13 @@ pnpm dev:gui:web
 pnpm dev:gui
 ```
 
+GUI actual (Fase 7 + Fase 8 base):
+
+- polish visual/UX (layout, badges, estados vacíos/carga)
+- vista `Agents` + panel de `Agent Activity` en sesión/dashboard
+- Vell orquesta delegación supervisada (subagentes especializados)
+- voz local MVP en `Current Session` (push-to-talk, STT, estados de voz)
+
 Doctor + setup Rust para GUI nativa:
 
 ```bash

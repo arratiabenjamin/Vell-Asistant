@@ -13,6 +13,7 @@ export const ROUTES = {
   sessionResume: (id: string) => `/sessions/${id}/resume`,
   sessionPrompt: (id: string) => `/sessions/${id}/prompt`,
   sessionPromptStream: (id: string) => `/sessions/${id}/prompt/stream`,
+  sessionAgentActivity: (id: string) => `/sessions/${id}/agents/activity`,
   sessionProjectSelect: (id: string) => `/sessions/${id}/project/select`,
   sessionProjectContext: (id: string) => `/sessions/${id}/project/context`,
   sessionSystemAction: (id: string, action: string) => `/sessions/${id}/system-actions/${action}`,

@@ -52,6 +52,10 @@ import {
 import {
   SystemActionInvokeRequestSchema,
   SystemActionNameSchema,
+  type AgentRunSnapshot,
+  type AgentRunStatus,
+  type SubAgentActivity,
+  type SubAgentRole,
   type SystemActionInvokeRequest,
   type SystemActionName,
   PermissionModeSchema,
@@ -88,6 +92,7 @@ const DEFAULT_PROVIDER_KEY = 'default.provider'
 const TUI_THEME_KEY = 'tui.theme'
 const LAST_ACTIVE_SESSION_KEY = 'session.last_active_id'
 const MAX_EVENT_HISTORY = 300
+const MAX_AGENT_SUMMARY_LEN = 700
 const ALLOWED_DEFAULT_PROVIDERS = new Set([
   'mock',
   'codex',
@@ -95,6 +100,29 @@ const ALLOWED_DEFAULT_PROVIDERS = new Set([
   'openai-compatible',
   'openai-chatgpt'
 ])
+
+const SUBAGENT_DEFINITIONS: Record<SubAgentRole, { specialty: string; triggers: RegExp[] }> = {
+  'planning-agent': {
+    specialty: 'descomposición estratégica y plan de ejecución',
+    triggers: [/(plan|roadmap|estrateg|pasos|enfoque|arquitect)/i]
+  },
+  'research-agent': {
+    specialty: 'investigación y contraste de información',
+    triggers: [/(investig|research|mercado|benchmark|compet|compar|tendenc)/i]
+  },
+  'documentation-agent': {
+    specialty: 'síntesis, documentación y comunicación técnica',
+    triggers: [/(document|resumen|síntes|spec|readme|informe|reporte)/i]
+  },
+  'marketing-agent': {
+    specialty: 'análisis comercial, posicionamiento y GTM',
+    triggers: [/(market|comercial|pricing|go-to-market|gtm|segment|ventas)/i]
+  },
+  'coding-agent': {
+    specialty: 'implementación, debugging y estrategia técnica',
+    triggers: [/(código|codigo|implement|refactor|debug|bug|test|arquitectura técnica)/i]
+  }
+}
 
 const PUBLIC_SETTINGS_KEYS = [POLICY_MODE_KEY, DEFAULT_PROVIDER_KEY, TUI_THEME_KEY] as const
 
@@ -155,6 +183,133 @@ async function main(): Promise<void> {
     return () => {
       eventSubscribers.delete(listener)
     }
+  }
+
+  const agentSnapshots = new Map<string, AgentRunSnapshot>()
+
+  const truncateText = (value: string, max = MAX_AGENT_SUMMARY_LEN): string => {
+    const normalized = value.trim()
+    if (normalized.length <= max) return normalized
+    return `${normalized.slice(0, max - 1)}…`
+  }
+
+  const shouldDelegatePrompt = (prompt: string): boolean => {
+    const normalized = prompt.trim()
+    if (!normalized) return false
+    if (normalized.split(/\s+/).length >= 14) return true
+    return Object.values(SUBAGENT_DEFINITIONS).some(definition =>
+      definition.triggers.some(trigger => trigger.test(normalized))
+    )
+  }
+
+  const pickSubAgents = (prompt: string): SubAgentRole[] => {
+    const selected: SubAgentRole[] = ['planning-agent']
+    for (const [role, definition] of Object.entries(SUBAGENT_DEFINITIONS) as Array<
+      [SubAgentRole, (typeof SUBAGENT_DEFINITIONS)[SubAgentRole]]
+    >) {
+      if (role === 'planning-agent') continue
+      if (definition.triggers.some(trigger => trigger.test(prompt))) {
+        selected.push(role)
+      }
+    }
+
+    if (selected.length === 1) {
+      selected.push('research-agent', 'documentation-agent')
+    }
+
+    return selected.slice(0, 4)
+  }
+
+  const createAgentRunSnapshot = (
+    sessionId: string,
+    goal: string,
+    roles: SubAgentRole[]
+  ): AgentRunSnapshot => {
+    const now = new Date().toISOString()
+    const runId = `${sessionId.slice(0, 8)}-${Date.now().toString(36)}`
+    const agents: SubAgentActivity[] = roles.map((role, index) => ({
+      id: `${runId}-${index + 1}`,
+      role,
+      specialty: SUBAGENT_DEFINITIONS[role].specialty,
+      status: 'idle',
+      inputSummary: '',
+      outputSummary: null,
+      error: null,
+      startedAt: null,
+      finishedAt: null
+    }))
+
+    return {
+      sessionId,
+      runId,
+      orchestrator: 'Vell',
+      goal: truncateText(goal, 320),
+      status: 'running',
+      startedAt: now,
+      updatedAt: now,
+      finishedAt: null,
+      agents,
+      finalSummary: null
+    }
+  }
+
+  const upsertAgentSnapshot = (
+    snapshot: AgentRunSnapshot,
+    eventType: 'agent.run_started' | 'agent.task_updated' | 'agent.run_completed' | 'agent.run_failed'
+  ): AgentRunSnapshot => {
+    agentSnapshots.set(snapshot.sessionId, snapshot)
+    publishEvent(eventType, {
+      sessionId: snapshot.sessionId,
+      payload: { snapshot }
+    })
+    return snapshot
+  }
+
+  const getRunStatusFromAgents = (agents: SubAgentActivity[]): AgentRunStatus => {
+    if (agents.some(agent => agent.status === 'running')) return 'running'
+    if (agents.some(agent => agent.status === 'failed')) return 'failed'
+    if (agents.length > 0 && agents.every(agent => agent.status === 'completed')) return 'completed'
+    return 'idle'
+  }
+
+  const updateAgentTask = (
+    sessionId: string,
+    role: SubAgentRole,
+    updater: (agent: SubAgentActivity) => SubAgentActivity
+  ): AgentRunSnapshot | null => {
+    const previous = agentSnapshots.get(sessionId)
+    if (!previous) return null
+
+    const updatedAgents = previous.agents.map(agent => (agent.role === role ? updater(agent) : agent))
+    const now = new Date().toISOString()
+    const updated: AgentRunSnapshot = {
+      ...previous,
+      agents: updatedAgents,
+      status: getRunStatusFromAgents(updatedAgents),
+      updatedAt: now
+    }
+
+    return upsertAgentSnapshot(updated, 'agent.task_updated')
+  }
+
+  const finalizeAgentRun = (
+    sessionId: string,
+    status: AgentRunStatus,
+    finalSummary: string | null
+  ): AgentRunSnapshot | null => {
+    const previous = agentSnapshots.get(sessionId)
+    if (!previous) return null
+
+    const now = new Date().toISOString()
+    const updated: AgentRunSnapshot = {
+      ...previous,
+      status,
+      updatedAt: now,
+      finishedAt: now,
+      finalSummary: finalSummary ? truncateText(finalSummary, 320) : null
+    }
+
+    return upsertAgentSnapshot(updated, status === 'failed' ? 'agent.run_failed' : 'agent.run_completed')
   }
 
   const getOpenAIAuthMode = (): OpenAIAuthMode => {
@@ -391,6 +546,66 @@ async function main(): Promise<void> {
     }
   }
 
+  const buildSubAgentInstruction = (role: SubAgentRole, goal: string): string => {
+    const prefix =
+      role === 'research-agent'
+        ? 'Sos research-agent. Buscá señales, hipótesis y riesgos de mercado.'
+        : role === 'documentation-agent'
+          ? 'Sos documentation-agent. Estructurá síntesis accionable y clara.'
+          : role === 'marketing-agent'
+            ? 'Sos marketing-agent. Priorizá propuesta de valor y estrategia comercial.'
+            : role === 'coding-agent'
+              ? 'Sos coding-agent. Priorizá enfoque técnico, implementación y riesgos.'
+              : 'Sos planning-agent. Descomponé objetivo en plan de ejecución.'
+
+    return [
+      prefix,
+      `Objetivo principal de Vell: ${goal}`,
+      'Devolvé un resumen breve (máximo 8 bullets) con enfoque práctico.'
+    ].join('\n')
+  }
+
+  const runSubAgentTurn = async (
+    session: ReturnType<typeof getSessionById>,
+    role: SubAgentRole,
+    goal: string,
+    history: EngineProviderMessage[],
+    runId: string
+  ): Promise<string> => {
+    if (!session) return '(session not found)'
+
+    let output = ''
+    for await (const event of engine.runTurn({
+      sessionId: `${session.id}:${runId}:${role}`,
+      prompt: buildSubAgentInstruction(role, goal),
+      provider: normalizeProviderName(session.provider ?? getDefaultProvider()),
+      model: session.model ?? undefined,
+      history
+    })) {
+      if (event.type === 'token') {
+        output += event.value
+      }
+    }
+
+    return truncateText(output || '(sin respuesta del subagente)')
+  }
+
+  const buildDelegationContext = (snapshot: AgentRunSnapshot): string => {
+    const lines = snapshot.agents.map(agent => {
+      const status = agent.status.toUpperCase()
+      const output = agent.outputSummary ?? agent.error ?? '(sin resumen)'
+      return `- ${agent.role} [${status}] => ${truncateText(output, 260)}`
+    })
+
+    return [
+      'Vell ejecutó delegación supervisada antes de responder.',
+      `Objetivo: ${snapshot.goal}`,
+      'Resultados parciales de subagentes:',
+      ...lines,
+      'Usá estos insumos para una respuesta final unificada y coherente.'
+    ].join('\n')
+  }
+
   const executeWriteFileForSession = async (
     sessionId: string,
     input: { path: string; content: string }
@@ -516,8 +731,67 @@ async function main(): Promise<void> {
 
     const run = async function* () {
       let assistantContent = ''
+      let snapshot: AgentRunSnapshot | null = null
 
       try {
+        const baseHistory = await toEngineHistory(sessionId)
+        const history: EngineProviderMessage[] = [...baseHistory]
+
+        if (shouldDelegatePrompt(input.content)) {
+          const roles = pickSubAgents(input.content)
+          snapshot = createAgentRunSnapshot(sessionId, input.content, roles)
+          upsertAgentSnapshot(snapshot, 'agent.run_started')
+          const runId = snapshot.runId
+
+          for (const role of roles) {
+            const runningNow = new Date().toISOString()
+            snapshot =
+              updateAgentTask(sessionId, role, previous => ({
+                ...previous,
+                status: 'running',
+                startedAt: runningNow,
+                inputSummary: truncateText(buildSubAgentInstruction(role, input.content), 220),
+                error: null
+              })) ?? snapshot
+
+            try {
+              const outputSummary = await runSubAgentTurn(
+                session,
+                role,
+                input.content,
+                baseHistory,
+                runId
+              )
+
+              const doneAt = new Date().toISOString()
+              snapshot =
+                updateAgentTask(sessionId, role, previous => ({
+                  ...previous,
+                  status: 'completed',
+                  outputSummary: truncateText(outputSummary, 340),
+                  finishedAt: doneAt,
+                  error: null
+                })) ?? snapshot
+            } catch (agentError) {
+              const message = agentError instanceof Error ? agentError.message : String(agentError)
+              const doneAt = new Date().toISOString()
+              snapshot =
+                updateAgentTask(sessionId, role, previous => ({
+                  ...previous,
+                  status: 'failed',
+                  error: truncateText(message, 220),
+                  outputSummary: null,
+                  finishedAt: doneAt
+                })) ?? snapshot
+            }
+          }
+
+          history.push({
+            role: 'system',
+            content: buildDelegationContext(snapshot)
+          })
+        }
+
         for await (const event of engine.runTurn({
           sessionId,
           prompt: input.content,
@@ -525,7 +799,7 @@ async function main(): Promise<void> {
             session.provider ?? process.env.FORGE_DEFAULT_PROVIDER?.trim() ?? 'mock'
           ),
           model: session.model ?? undefined,
-          history: await toEngineHistory(sessionId)
+          history
         })) {
           if (event.type === 'token') {
             assistantContent += event.value
@@ -539,6 +813,10 @@ async function main(): Promise<void> {
           role: 'assistant',
           content: `[engine-error] ${message}`
         })
+
+        if (snapshot) {
+          finalizeAgentRun(sessionId, 'failed', message)
+        }
 
         yield { type: 'error', message } as const
         yield { type: 'done', assistantMessage } as const
@@ -554,6 +832,10 @@ async function main(): Promise<void> {
         role: 'assistant',
         content: assistantContent.trim() ? assistantContent : '(empty assistant response)'
       })
+
+      if (snapshot) {
+        finalizeAgentRun(sessionId, snapshot.agents.some(agent => agent.status === 'failed') ? 'failed' : 'completed', assistantMessage.content)
+      }
 
       publishEvent('session.prompt_completed', {
         sessionId,
@@ -595,7 +877,10 @@ async function main(): Promise<void> {
         lastSessionUpdatedAt: getLatestSessionUpdatedAt(storage),
         uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
         defaultProvider: getDefaultProvider(),
-        eventSubscribers: eventSubscribers.size
+        eventSubscribers: eventSubscribers.size,
+        activeAgentRuns: Array.from(agentSnapshots.values()).filter(snapshot => snapshot.status === 'running')
+          .length,
+        recentDelegations: agentSnapshots.size
       } as const
     },
     listSessions: () => listSessions(storage),
@@ -637,6 +922,13 @@ async function main(): Promise<void> {
       return {
         session,
         messages: listSessionMessages(storage, sessionId)
+      }
+    },
+    getSessionAgentActivity: sessionId => {
+      const session = getSessionById(storage, sessionId)
+      if (!session) return null
+      return {
+        snapshot: agentSnapshots.get(sessionId) ?? null
       }
     },
     resumeSession: sessionId => {

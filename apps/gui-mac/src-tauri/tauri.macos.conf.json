@@ -4,7 +4,10 @@
     "targets": ["app", "dmg"],
     "category": "Utility",
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Vell necesita acceso al micrófono para push-to-talk local."
+      }
     }
   }
 }

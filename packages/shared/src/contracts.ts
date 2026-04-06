@@ -35,7 +35,9 @@ export const DaemonStatusResponseSchema = z.object({
   lastSessionUpdatedAt: z.string().nullable(),
   uptimeSec: z.number().nonnegative(),
   defaultProvider: z.string(),
-  eventSubscribers: z.number().int().nonnegative()
+  eventSubscribers: z.number().int().nonnegative(),
+  activeAgentRuns: z.number().int().nonnegative().optional(),
+  recentDelegations: z.number().int().nonnegative().optional()
 })
 
 export type DaemonStatusResponse = z.infer<typeof DaemonStatusResponseSchema>
@@ -325,6 +327,57 @@ export const DaemonEventSchema = z.object({
 })
 
 export type DaemonEvent = z.infer<typeof DaemonEventSchema>
+
+export const SubAgentRoleSchema = z.enum([
+  'research-agent',
+  'documentation-agent',
+  'marketing-agent',
+  'coding-agent',
+  'planning-agent'
+])
+
+export type SubAgentRole = z.infer<typeof SubAgentRoleSchema>
+
+export const SubAgentStatusSchema = z.enum(['idle', 'running', 'completed', 'failed'])
+export type SubAgentStatus = z.infer<typeof SubAgentStatusSchema>
+
+export const SubAgentActivitySchema = z.object({
+  id: z.string(),
+  role: SubAgentRoleSchema,
+  specialty: z.string(),
+  status: SubAgentStatusSchema,
+  inputSummary: z.string(),
+  outputSummary: z.string().nullable(),
+  error: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable()
+})
+
+export type SubAgentActivity = z.infer<typeof SubAgentActivitySchema>
+
+export const AgentRunStatusSchema = z.enum(['idle', 'running', 'completed', 'failed'])
+export type AgentRunStatus = z.infer<typeof AgentRunStatusSchema>
+
+export const AgentRunSnapshotSchema = z.object({
+  sessionId: z.string(),
+  runId: z.string(),
+  orchestrator: z.literal('Vell'),
+  goal: z.string(),
+  status: AgentRunStatusSchema,
+  startedAt: z.string(),
+  updatedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  agents: z.array(SubAgentActivitySchema),
+  finalSummary: z.string().nullable()
+})
+
+export type AgentRunSnapshot = z.infer<typeof AgentRunSnapshotSchema>
+
+export const AgentRunResponseSchema = z.object({
+  snapshot: AgentRunSnapshotSchema.nullable()
+})
+
+export type AgentRunResponse = z.infer<typeof AgentRunResponseSchema>
 
 export const ProjectSchema = z.object({
   id: z.string(),

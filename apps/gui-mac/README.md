@@ -10,13 +10,21 @@ GUI secundaria para macOS usando Tauri.
 
 La GUI **no** implementa lógica de negocio de engine/daemon.
 
-## Vistas MVP incluidas
+## Vistas actuales
 
 1. Dashboard
 2. Current Session
-3. Approvals
-4. Projects
-5. Settings
+3. Agents
+4. Approvals
+5. Projects
+6. Settings
+
+En `Current Session`, Vell muestra:
+
+- streaming en vivo
+- tools/events recientes
+- panel de **Agent Activity** (delegación supervisada por Vell)
+- **push-to-talk local** (cuando el runtime soporta Web Speech API)
 
 ## Requisitos
 
@@ -99,9 +107,17 @@ Si activás `sign` o `notarize`, el workflow espera secretos Apple y falla con u
 
 Antes de construir, el workflow corre `pnpm smoke:gui:mac-clean` para validar una Mac limpia.
 
+## Voz local (MVP)
+
+- input por micrófono con botón *mantener para hablar*
+- estados UI: `listening`, `transcribing`, `sending`, `error`, `unsupported`
+- el transcript se envía al mismo flujo de prompt del daemon (no hay lógica paralela)
+- en macOS nativo, se declara `NSMicrophoneUsageDescription` en `src-tauri/tauri.macos.conf.json`
+
 ## Limitaciones actuales
 
 - Es un shell visual austero (no editor avanzado).
-- No incluye audio, voz, hotword ni remoto móvil.
+- La capa de voz depende de soporte del WebView (`SpeechRecognition`/`webkitSpeechRecognition`).
+- No incluye hotword, escucha continua ni remoto móvil.
 - El streaming es básico (texto en vivo de la respuesta actual).
 - La firma/notarización quedan para el workflow manual con secretos Apple.
