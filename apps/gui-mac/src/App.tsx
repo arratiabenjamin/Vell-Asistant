@@ -54,6 +54,14 @@ export default function App() {
     currentSessionRecord?.model ?? 'default'
   }`
 
+  const recentDelegationEvents = useMemo(
+    () =>
+      events
+        .filter(event => event.type.startsWith('agent.') && event.sessionId === currentSessionRecord?.id)
+        .slice(-8),
+    [currentSessionRecord?.id, events]
+  )
+
   const pendingCount = pendingApprovals.length
 
   const currentScreen = useMemo(() => {
@@ -64,6 +72,7 @@ export default function App() {
           status={status}
           currentSession={currentSessionRecord}
           currentAgentActivity={currentSessionAgentActivity}
+          recentDelegationEvents={recentDelegationEvents}
           pendingApprovals={pendingCount}
           onOpenSession={() => setView('session')}
           onOpenApprovals={() => setView('approvals')}
@@ -155,6 +164,7 @@ export default function App() {
     currentSessionAgentActivity,
     currentSessionRecord,
     events,
+    recentDelegationEvents,
     openProject,
     openAIAuthStatus,
     pendingCount,
@@ -183,23 +193,25 @@ export default function App() {
       <main className="main-area">
         <header className="top-header vell-header">
           <div>
-            <p className="muted">Daemon</p>
+            <p className="eyebrow">Daemon</p>
             <p>
-              <span className={statusClass(connected)}>{connected ? 'online' : 'offline'}</span>
+              <span className={statusClass(connected)}>{connected ? 'online' : 'offline'}</span>{' '}
+              <span className="badge info">uptime {Math.round(status?.uptimeSec ?? 0)}s</span>
             </p>
             <p className="muted">{daemonUrl}</p>
           </div>
 
           <div>
-            <p className="muted">Session</p>
+            <p className="eyebrow">Session</p>
             <p>
-              <strong>{shortId(currentSessionRecord?.id)}</strong>
+              <strong>{shortId(currentSessionRecord?.id)}</strong>{' '}
+              <span className="badge neutral">{currentSessionRecord?.title ?? 'sin sesión activa'}</span>
             </p>
-            <p className="muted">{currentSessionRecord?.title ?? '(sin sesión activa)'}</p>
+            <p className="muted">Current orchestration entrypoint</p>
           </div>
 
           <div>
-            <p className="muted">Project</p>
+            <p className="eyebrow">Project</p>
             <p>
               <strong>{truncate(currentSessionRecord?.projectPath ?? '(sin proyecto)', 56)}</strong>
             </p>
@@ -207,7 +219,7 @@ export default function App() {
           </div>
 
           <div>
-            <p className="muted">Approvals / Agents</p>
+            <p className="eyebrow">Approvals / Agents</p>
             <p>
               <span className={`badge ${pendingCount > 0 ? 'warn' : 'ok'}`}>approvals: {pendingCount}</span>
               <span className={`badge ${activeAgentRuns > 0 ? 'warn' : 'ok'}`}>agents: {activeAgentRuns}</span>

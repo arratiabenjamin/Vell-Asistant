@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type VoiceUiState = 'idle' | 'unsupported' | 'listening' | 'transcribing' | 'sending' | 'error'
 
@@ -35,11 +35,28 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
 
 export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputOptions) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const stateRef = useRef<VoiceUiState>('idle')
   const transcriptRef = useRef('')
   const [state, setState] = useState<VoiceUiState>('idle')
   const [error, setError] = useState<string | null>(null)
 
   const supported = useMemo(() => Boolean(getSpeechRecognitionCtor()), [])
+
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop()
+      recognitionRef.current = null
+    }
+  }, [])
+
+  const syncState = useCallback((nextState: VoiceUiState) => {
+    stateRef.current = nextState
+    setState(nextState)
+  }, [])
 
   const stopListening = useCallback(() => {
     const recognition = recognitionRef.current
@@ -49,10 +66,13 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
 
   const startListening = useCallback(() => {
     if (disabled) return
+    if (stateRef.current === 'listening' || stateRef.current === 'transcribing' || stateRef.current === 'sending') {
+      return
+    }
 
     const SpeechRecognition = getSpeechRecognitionCtor()
     if (!SpeechRecognition) {
-      setState('unsupported')
+      syncState('unsupported')
       setError('SpeechRecognition no disponible en este runtime.')
       return
     }
@@ -67,13 +87,14 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
     recognition.maxAlternatives = 1
 
     recognition.onstart = () => {
-      setState('listening')
+      syncState('listening')
     }
 
     recognition.onerror = event => {
       const message = event.error ? `voice error: ${event.error}` : 'voice error'
       setError(message)
-      setState('error')
+      recognitionRef.current = null
+      syncState('error')
     }
 
     recognition.onresult = event => {
@@ -86,28 +107,29 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
     }
 
     recognition.onend = () => {
+      recognitionRef.current = null
       const finalTranscript = transcriptRef.current.trim()
       if (!finalTranscript) {
-        if (state === 'listening') {
-          setState('idle')
+        if (stateRef.current !== 'error') {
+          syncState('idle')
         }
         return
       }
 
-      setState('transcribing')
-      void onTranscript(finalTranscript)
-        .then(() => {
-          setState('sending')
-        })
-        .then(() => {
-          setState('idle')
-        })
-        .catch(transcriptError => {
-          const message =
-            transcriptError instanceof Error ? transcriptError.message : String(transcriptError)
-          setError(`voice send error: ${message}`)
-          setState('error')
-        })
+      syncState('transcribing')
+      queueMicrotask(() => {
+        syncState('sending')
+        void onTranscript(finalTranscript)
+          .then(() => {
+            syncState('idle')
+          })
+          .catch(transcriptError => {
+            const message =
+              transcriptError instanceof Error ? transcriptError.message : String(transcriptError)
+            setError(`voice send error: ${message}`)
+            syncState('error')
+          })
+      })
     }
 
     recognitionRef.current = recognition
@@ -115,16 +137,19 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
     try {
       recognition.start()
     } catch (startError) {
+      recognitionRef.current = null
       const message = startError instanceof Error ? startError.message : String(startError)
       setError(`voice start error: ${message}`)
-      setState('error')
+      syncState('error')
     }
-  }, [disabled, onTranscript, state])
+  }, [disabled, onTranscript, syncState])
 
   const clearError = useCallback(() => {
     setError(null)
-    setState('idle')
-  }, [])
+    if (stateRef.current === 'error') {
+      syncState('idle')
+    }
+  }, [syncState])
 
   return {
     supported,

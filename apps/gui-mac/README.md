@@ -25,6 +25,15 @@ En `Current Session`, Vell muestra:
 - tools/events recientes
 - panel de **Agent Activity** (delegación supervisada por Vell)
 - **push-to-talk local** (cuando el runtime soporta Web Speech API)
+- lectura opcional de la última respuesta con síntesis de voz del navegador
+- timeline visual de eventos de delegación para seguir el trabajo de subagentes
+- command bar con slash commands (`/new`, `/resume`, `/refresh`, `/agents`, `/help`)
+
+Endpoint usado por GUI para delegación:
+
+```bash
+GET /sessions/:id/agents/activity
+```
 
 ## Requisitos
 

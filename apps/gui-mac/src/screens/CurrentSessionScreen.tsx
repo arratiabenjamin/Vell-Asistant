@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { AgentRunSnapshot, DaemonEvent, Session, SessionDetailResponse } from '@forge/shared'
 import type { SessionUiState } from '../hooks/useForgeDaemon'
+import { useSpeechOutput } from '../hooks/useSpeechOutput'
 import { useVoiceInput } from '../hooks/useVoiceInput'
+import { Badge, EmptyState, StatCard } from '../components/ui'
 import { formatDateTime, shortId, summarizeUnknown, truncate } from '../utils'
 
 type CurrentSessionScreenProps = {
@@ -23,18 +25,26 @@ type CurrentSessionScreenProps = {
 const MAX_MESSAGES = 28
 const MAX_EVENTS = 18
 
-function sessionStateClass(state: SessionUiState): string {
-  if (state === 'error') return 'badge error'
-  if (state === 'waiting_approval') return 'badge warn'
-  if (state === 'thinking') return 'badge info'
-  return 'badge ok'
+function sessionStateTone(state: SessionUiState): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
+  if (state === 'error') return 'danger'
+  if (state === 'waiting_approval') return 'warning'
+  if (state === 'thinking') return 'info'
+  return 'success'
 }
 
-function agentStatusClass(status: string): string {
-  if (status === 'completed') return 'badge ok'
-  if (status === 'failed') return 'badge error'
-  if (status === 'running') return 'badge warn'
-  return 'badge'
+function agentStatusTone(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
+  if (status === 'completed') return 'success'
+  if (status === 'failed') return 'danger'
+  if (status === 'running') return 'warning'
+  return 'neutral'
+}
+
+function voiceTone(state: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
+  if (state === 'listening') return 'info'
+  if (state === 'sending' || state === 'transcribing') return 'warning'
+  if (state === 'error') return 'danger'
+  if (state === 'unsupported') return 'neutral'
+  return 'success'
 }
 
 export function CurrentSessionScreen({
@@ -58,6 +68,11 @@ export function CurrentSessionScreen({
 
   const recentMessages = useMemo(() => session?.messages.slice(-MAX_MESSAGES) ?? [], [session?.messages])
 
+  const assistantResponse = useMemo(() => {
+    const latestAssistantMessage = [...recentMessages].reverse().find(message => message.role === 'assistant')
+    return streamingText.trim() || latestAssistantMessage?.content?.trim() || ''
+  }, [recentMessages, streamingText])
+
   const relevantEvents = useMemo(() => {
     const sessionId = session?.session.id
     if (!sessionId) return events.slice(-MAX_EVENTS)
@@ -65,6 +80,8 @@ export function CurrentSessionScreen({
     const scoped = events.filter(event => event.sessionId === sessionId)
     return scoped.slice(-MAX_EVENTS)
   }, [events, session?.session.id])
+
+  const agentEvents = useMemo(() => relevantEvents.filter(event => event.type.startsWith('agent.')), [relevantEvents])
 
   const handleSlashCommand = async (raw: string): Promise<boolean> => {
     const normalized = raw.trim()
@@ -135,15 +152,28 @@ export function CurrentSessionScreen({
     }
   })
 
+  const {
+    supported: speechSupported,
+    state: speechState,
+    error: speechError,
+    speak,
+    cancel: stopSpeech,
+    clearError: clearSpeechError
+  } = useSpeechOutput()
+
   return (
     <section className="screen session-screen">
       <div className="section-header">
         <div>
+          <p className="eyebrow">Live coordination</p>
           <h2>Current Session</h2>
-          <p className="muted">Conversás con Vell. Vell puede delegar a subagentes y consolidar.</p>
+          <p className="muted">Conversás con Vell. La sesión mantiene streaming, tools y delegación supervisada.</p>
         </div>
-        <div className="actions-row">
-          <span className={sessionStateClass(sessionState)}>{sessionState}</span>
+
+        <div className="actions-row wrap">
+          <Badge tone={sessionStateTone(sessionState)}>{sessionState}</Badge>
+          <Badge tone={voiceTone(voiceState)}>voice: {voiceState}</Badge>
+          <Badge tone={voiceTone(speechState)}>tts: {speechState}</Badge>
           <button onClick={() => void onResumeLatest()} disabled={busy}>
             Reanudar latest
           </button>
@@ -153,9 +183,35 @@ export function CurrentSessionScreen({
         </div>
       </div>
 
-      <div className="card session-meta">
+      <div className="stats-grid">
+        <StatCard
+          title="Session"
+          value={session ? shortId(session.session.id) : '—'}
+          caption={session?.session.title ?? 'sin sesión activa'}
+          tone="info"
+        />
+        <StatCard
+          title="Project / model"
+          value={truncate(session?.session.projectPath ?? '(sin proyecto)', 40)}
+          caption={`${session?.session.provider ?? '-'} / ${session?.session.model ?? 'default'}`}
+        />
+        <StatCard
+          title="Execution"
+          value={sessionState}
+          caption={`messages ${recentMessages.length} · events ${relevantEvents.length}`}
+          tone={sessionStateTone(sessionState)}
+        />
+        <StatCard
+          title="Delegation"
+          value={agentActivity ? `${agentActivity.agents.length} subagents` : 'sin run'}
+          caption={agentActivity?.status ?? 'idle'}
+          tone={agentActivity ? agentStatusTone(agentActivity.status) : 'neutral'}
+        />
+      </div>
+
+      <div className="card soft-card">
         <div className="actions-row wrap">
-          <label>
+          <label className="field-inline">
             Session
             <select
               value={session?.session.id ?? ''}
@@ -177,12 +233,15 @@ export function CurrentSessionScreen({
             </select>
           </label>
 
-          <input
-            type="text"
-            value={newSessionTitle}
-            onChange={event => setNewSessionTitle(event.target.value)}
-            placeholder="Título nueva sesión"
-          />
+          <label className="field-inline grow">
+            Nueva sesión
+            <input
+              type="text"
+              value={newSessionTitle}
+              onChange={event => setNewSessionTitle(event.target.value)}
+              placeholder="Título para nueva sesión"
+            />
+          </label>
 
           <button
             onClick={() => {
@@ -212,23 +271,51 @@ export function CurrentSessionScreen({
             </p>
           </div>
         ) : (
-          <p className="muted">No hay sesión activa. Enviá un prompt para crear una sesión rápida.</p>
+          <EmptyState
+            title="No hay sesión activa"
+            description="Enviá un prompt o creá una sesión para empezar a coordinar con Vell."
+          />
         )}
       </div>
 
       <div className="grid-two session-content-grid">
-        <article className="card scrollable conversation-pane">
-          <h3>Conversation</h3>
+        <article className="card soft-card scrollable conversation-pane">
+          <div className="row-space">
+            <div>
+              <p className="eyebrow">Conversation</p>
+              <h3>Transcript</h3>
+            </div>
+
+            <div className="actions-row wrap">
+              <Badge tone="neutral">{recentMessages.length} msgs</Badge>
+              {assistantResponse ? (
+                <button
+                  onClick={() => speak(assistantResponse)}
+                  disabled={!speechSupported || assistantResponse.length === 0 || speechState === 'speaking'}
+                >
+                  🔊 Leer respuesta
+                </button>
+              ) : null}
+              {speechState === 'speaking' ? <button onClick={stopSpeech}>Stop reading</button> : null}
+            </div>
+          </div>
+
           {recentMessages.length === 0 ? (
-            <p className="muted">Sin mensajes todavía.</p>
+            <EmptyState
+              title="Sin mensajes todavía"
+              description="La conversación aparecerá acá cuando Vell reciba prompts y responda."
+            />
           ) : (
             <ul className="list-clean">
               {recentMessages.map(message => (
                 <li key={message.id} className="message-item">
-                  <p>
-                    <strong>[{message.role}]</strong> {truncate(message.content, 380)}
-                  </p>
-                  <p className="muted">{formatDateTime(message.createdAt)}</p>
+                  <div className="row-space">
+                    <Badge tone={message.role === 'assistant' ? 'success' : message.role === 'user' ? 'info' : 'neutral'}>
+                      {message.role}
+                    </Badge>
+                    <span className="muted">{formatDateTime(message.createdAt)}</span>
+                  </div>
+                  <p>{truncate(message.content, 380)}</p>
                 </li>
               ))}
             </ul>
@@ -236,66 +323,112 @@ export function CurrentSessionScreen({
 
           {streamingText ? (
             <div className="stream-box">
-              <strong>Streaming</strong>
+              <div className="row-space">
+                <strong>Streaming</strong>
+                <Badge tone="info">live</Badge>
+              </div>
               <p>{streamingText}</p>
             </div>
           ) : null}
         </article>
 
         <div className="list-stack">
-          <article className="card scrollable">
+          <article className="card soft-card scrollable">
             <div className="row-space">
-              <h3>Agent Activity</h3>
+              <div>
+                <p className="eyebrow">Agent Activity</p>
+                <h3>Vell orchestrator</h3>
+              </div>
               <button onClick={onOpenAgents}>Open Agents</button>
             </div>
 
             {!agentActivity ? (
-              <p className="muted">Sin delegación registrada en esta sesión.</p>
+              <EmptyState
+                title="Sin delegación registrada"
+                description="Vell todavía no delegó subtareas en esta sesión."
+                action={<button onClick={onOpenAgents}>Ver catálogo</button>}
+              />
             ) : (
               <>
-                <p>
-                  <strong>Vell run:</strong> {agentActivity.runId} ·{' '}
-                  <span className={agentStatusClass(agentActivity.status)}>{agentActivity.status}</span>
-                </p>
-                <p className="muted">{truncate(agentActivity.goal, 200)}</p>
+                <div className="actions-row wrap">
+                  <Badge tone={agentStatusTone(agentActivity.status)}>{agentActivity.status}</Badge>
+                  <Badge tone="info">run {agentActivity.runId}</Badge>
+                  <Badge tone="neutral">{agentActivity.agents.length} subagents</Badge>
+                </div>
+                <p className="muted">{truncate(agentActivity.goal, 220)}</p>
 
-                <ul className="list-clean">
+                <div className="agent-grid compact">
                   {agentActivity.agents.map(agent => (
-                    <li key={agent.id} className="message-item">
+                    <article key={agent.id} className="agent-card">
                       <div className="row-space">
                         <strong>{agent.role}</strong>
-                        <span className={agentStatusClass(agent.status)}>{agent.status}</span>
+                        <Badge tone={agentStatusTone(agent.status)}>{agent.status}</Badge>
                       </div>
                       <p className="muted">{agent.specialty}</p>
-                      <p className="muted">{truncate(agent.outputSummary ?? agent.error ?? '(sin output)', 220)}</p>
-                    </li>
+                      <p className="muted">{truncate(agent.outputSummary ?? agent.error ?? '(sin output)', 180)}</p>
+                    </article>
                   ))}
-                </ul>
+                </div>
 
                 {agentActivity.finalSummary ? (
-                  <div className="stream-box">
+                  <div className="stream-box subtle">
                     <strong>Vell summary</strong>
-                    <p>{truncate(agentActivity.finalSummary, 300)}</p>
+                    <p>{truncate(agentActivity.finalSummary, 320)}</p>
                   </div>
                 ) : null}
               </>
             )}
           </article>
 
-          <article className="card scrollable">
-            <h3>Tools / Events</h3>
+          <article className="card soft-card scrollable">
+            <div className="row-space">
+              <div>
+                <p className="eyebrow">Delegation timeline</p>
+                <h3>Recent events</h3>
+              </div>
+              <Badge tone="neutral">{agentEvents.length} events</Badge>
+            </div>
+
+            {agentEvents.length === 0 ? (
+              <EmptyState title="Sin eventos recientes" description="Los eventos de delegación aparecerán acá." />
+            ) : (
+              <div className="timeline">
+                {agentEvents.map(event => (
+                  <article key={event.id} className="timeline-item">
+                    <div className="timeline-row">
+                      <Badge tone={event.type.endsWith('failed') ? 'danger' : event.type.endsWith('completed') ? 'success' : 'info'}>
+                        {event.type}
+                      </Badge>
+                      <span className="muted">#{shortId(String(event.id))}</span>
+                    </div>
+                    <p className="muted">{formatDateTime(event.timestamp)}</p>
+                    <p className="muted">{summarizeUnknown(event.payload)}</p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </article>
+
+          <article className="card soft-card scrollable">
+            <div className="row-space">
+              <div>
+                <p className="eyebrow">Tools / Events</p>
+                <h3>Runtime feed</h3>
+              </div>
+              <Badge tone="neutral">{relevantEvents.length} total</Badge>
+            </div>
+
             {relevantEvents.length === 0 ? (
-              <p className="muted">Sin eventos recientes.</p>
+              <EmptyState title="Sin eventos recientes" description="Las herramientas y eventos del daemon aparecerán aquí." />
             ) : (
               <ul className="list-clean">
                 {relevantEvents.map(event => (
                   <li key={event.id} className="message-item">
-                    <p>
-                      <strong>{event.type}</strong>
-                    </p>
-                    <p className="muted">
-                      #{event.id} · {formatDateTime(event.timestamp)}
-                    </p>
+                    <div className="row-space">
+                      <Badge tone="neutral">{event.type}</Badge>
+                      <span className="muted">{formatDateTime(event.timestamp)}</span>
+                    </div>
+                    <p className="muted">#{event.id}</p>
                     <p className="muted">{summarizeUnknown(event.payload)}</p>
                   </li>
                 ))}
@@ -327,21 +460,28 @@ export function CurrentSessionScreen({
           <button
             className={voiceState === 'listening' ? 'voice-button listening' : 'voice-button'}
             disabled={!voiceSupported || busy || voiceState === 'sending' || voiceState === 'transcribing'}
-            onMouseDown={startListening}
-            onMouseUp={stopListening}
-            onMouseLeave={stopListening}
-            onTouchStart={startListening}
-            onTouchEnd={stopListening}
+            onPointerDown={startListening}
+            onPointerUp={stopListening}
+            onPointerCancel={stopListening}
+            onPointerLeave={stopListening}
           >
             {voiceSupported ? '🎙️ Push to talk' : '🎙️ Voice unavailable'}
           </button>
 
           <span className="badge info">voice: {voiceState}</span>
+          <span className="badge info">tts: {speechState}</span>
 
           {voiceError ? (
             <>
               <span className="error">{voiceError}</span>
               <button onClick={clearVoiceError}>Clear voice error</button>
+            </>
+          ) : null}
+
+          {speechError ? (
+            <>
+              <span className="error">{speechError}</span>
+              <button onClick={clearSpeechError}>Clear tts error</button>
             </>
           ) : null}
         </div>

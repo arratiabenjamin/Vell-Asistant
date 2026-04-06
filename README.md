@@ -111,6 +111,8 @@ GUI actual (Fase 7 + Fase 8 base):
 - vista `Agents` + panel de `Agent Activity` en sesión/dashboard
 - Vell orquesta delegación supervisada (subagentes especializados)
 - voz local MVP en `Current Session` (push-to-talk, STT, estados de voz)
+- lectura opcional de la última respuesta vía speech synthesis del frontend
+- timeline de eventos de delegación para ver cuándo Vell dividió y consolidó tareas
 
 Doctor + setup Rust para GUI nativa:
 
@@ -261,6 +263,9 @@ curl -X POST http://127.0.0.1:4545/sessions/latest/resume
 curl -N http://127.0.0.1:4545/events/stream
 # replay desde id:
 curl -N "http://127.0.0.1:4545/events/stream?since=10"
+
+# snapshot de delegación multi-agente (Vell orchestrator)
+curl http://127.0.0.1:4545/sessions/<session-id>/agents/activity
 ```
 
 ## Seguridad de API local (token)
