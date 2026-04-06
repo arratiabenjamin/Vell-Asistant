@@ -131,6 +131,8 @@ Release GUI nativa manual (unsigned o signed/notarized opcional): `.github/workf
 
 Para el flujo firmado/notarizado se usan secretos Apple y el workflow falla temprano si faltan.
 
+QA manual de GUI/voz/multi-agente: `docs/gui-qa-checklist.md`
+
 Project context + read tools (Sprint 4):
 
 ```bash

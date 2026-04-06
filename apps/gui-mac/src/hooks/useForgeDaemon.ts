@@ -18,6 +18,11 @@ import { daemonClient, daemonUrl } from '../client/daemonClient'
 
 export type SessionUiState = 'idle' | 'thinking' | 'waiting_approval' | 'error'
 
+type CreateSessionOptions = {
+  title?: string
+  provider?: string
+}
+
 const MAX_EVENTS = 200
 
 function pushEvent(previous: DaemonEvent[], next: DaemonEvent): DaemonEvent[] {
@@ -260,6 +265,12 @@ export function useForgeDaemon() {
     [agentSnapshots]
   )
 
+  const resolveRealProvider = useCallback((): string => {
+    const preferred = status?.defaultProvider?.trim()
+    if (preferred && preferred !== 'mock') return preferred
+    return 'openai-chatgpt'
+  }, [status?.defaultProvider])
+
   const setCurrentSessionById = useCallback(
     async (sessionId: string) => {
       await loadCurrentSession(sessionId)
@@ -270,27 +281,32 @@ export function useForgeDaemon() {
     [loadCurrentSession, refreshSessionAgentActivity]
   )
 
+  const createSessionWithOptions = useCallback(
+    async (options: CreateSessionOptions = {}): Promise<Session> => {
+      const created = await daemonClient.createSession({
+        title: options.title?.trim() || 'GUI Session',
+        provider: options.provider ?? status?.defaultProvider ?? 'mock'
+      })
+
+      await refreshSessions()
+      await loadCurrentSession(created.id)
+      await refreshSessionAgentActivity(created.id)
+      await refreshStatusOnly()
+      return created
+    },
+    [
+      loadCurrentSession,
+      refreshSessionAgentActivity,
+      refreshSessions,
+      refreshStatusOnly,
+      status?.defaultProvider
+    ]
+  )
+
   const ensureCurrentSession = useCallback(async (): Promise<Session> => {
     if (currentSessionRecord) return currentSessionRecord
-
-    const created = await daemonClient.createSession({
-      title: 'GUI Session',
-      provider: status?.defaultProvider ?? 'mock'
-    })
-
-    await refreshSessions()
-    await loadCurrentSession(created.id)
-    await refreshSessionAgentActivity(created.id)
-    await refreshStatusOnly()
-    return created
-  }, [
-    currentSessionRecord,
-    loadCurrentSession,
-    refreshSessionAgentActivity,
-    refreshSessions,
-    refreshStatusOnly,
-    status?.defaultProvider
-  ])
+    return createSessionWithOptions()
+  }, [createSessionWithOptions, currentSessionRecord])
 
   const submitPrompt = useCallback(
     async (content: string) => {
@@ -380,22 +396,32 @@ export function useForgeDaemon() {
       setError(null)
 
       try {
-        const created = await daemonClient.createSession({
-          title: title?.trim() || 'GUI Session',
-          provider: status?.defaultProvider ?? 'mock'
-        })
-        await refreshSessions()
-        await loadCurrentSession(created.id)
-        await refreshSessionAgentActivity(created.id)
-        await refreshStatusOnly()
+        await createSessionWithOptions({ title })
       } catch (createError) {
         const message = createError instanceof Error ? createError.message : String(createError)
         setError(`No pude crear sesión: ${message}`)
+      } finally {
+        setBusy(false)
       }
-
-      setBusy(false)
     },
-    [loadCurrentSession, refreshSessionAgentActivity, refreshSessions, refreshStatusOnly, status?.defaultProvider]
+    [createSessionWithOptions]
+  )
+
+  const createRealSession = useCallback(
+    async (title?: string) => {
+      setBusy(true)
+      setError(null)
+
+      try {
+        await createSessionWithOptions({ title, provider: resolveRealProvider() })
+      } catch (createError) {
+        const message = createError instanceof Error ? createError.message : String(createError)
+        setError(`No pude crear sesión real: ${message}`)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [createSessionWithOptions, resolveRealProvider]
   )
 
   const approve = useCallback(
@@ -614,6 +640,8 @@ export function useForgeDaemon() {
     setCurrentSessionById,
     resumeLatestSession,
     createSession,
+    createRealSession,
+    resolveRealProvider,
     submitPrompt,
     approve,
     reject,

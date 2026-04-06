@@ -130,3 +130,23 @@ Antes de construir, el workflow corre `pnpm smoke:gui:mac-clean` para validar un
 - No incluye hotword, escucha continua ni remoto móvil.
 - El streaming es básico (texto en vivo de la respuesta actual).
 - La firma/notarización quedan para el workflow manual con secretos Apple.
+
+## QA antes de merge
+
+Usá `docs/gui-qa-checklist.md` para validar cambios de GUI, voz y multi-agente.
+
+Checklist mínimo:
+
+- la sesión actual no debe quedar confundida con `mock`
+- si está en `mock`, la app debe mostrar warning visible y CTA para crear sesión real
+- `Push to talk` debe mostrar estados claros y hints de permisos si falla
+- la conversación debe seguir creciendo con auto-scroll
+- `Agent Activity` y el feed de Vell deben seguir visibles
+
+Comandos útiles:
+
+```bash
+pnpm -s typecheck
+pnpm -s smoke:gui:mac-clean
+pnpm --filter @forge/gui-mac doctor:mac
+```

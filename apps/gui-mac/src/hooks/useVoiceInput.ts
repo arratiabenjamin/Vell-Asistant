@@ -7,6 +7,26 @@ type UseVoiceInputOptions = {
   disabled?: boolean
 }
 
+function describeVoicePermissionHint(error: string | null, supported: boolean): string | null {
+  if (!supported) {
+    return 'Este runtime no expone SpeechRecognition. Probá la app nativa con permisos de macOS o seguí por texto.'
+  }
+
+  switch (error) {
+    case 'service-not-allowed':
+    case 'not-allowed':
+      return 'macOS bloqueó el reconocimiento. Revisá permisos en Privacy & Security → Microphone y Speech Recognition.'
+    case 'audio-capture':
+      return 'No se detectó micrófono activo. Probá conectarlo o elegir otro input de audio.'
+    case 'network':
+      return 'El reconocimiento falló por red. Probá de nuevo o usá entrada de texto.'
+    case 'language-not-supported':
+      return 'El idioma configurado no está soportado en este runtime.'
+    default:
+      return null
+  }
+}
+
 type SpeechRecognitionLike = {
   lang: string
   continuous: boolean
@@ -39,12 +59,19 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
   const transcriptRef = useRef('')
   const [state, setState] = useState<VoiceUiState>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [hint, setHint] = useState<string | null>(null)
 
   const supported = useMemo(() => Boolean(getSpeechRecognitionCtor()), [])
 
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  useEffect(() => {
+    if (!supported) {
+      setHint(describeVoicePermissionHint(null, false))
+    }
+  }, [supported])
 
   useEffect(() => {
     return () => {
@@ -74,11 +101,13 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
     if (!SpeechRecognition) {
       syncState('unsupported')
       setError('SpeechRecognition no disponible en este runtime.')
+      setHint(describeVoicePermissionHint(null, false))
       return
     }
 
     transcriptRef.current = ''
     setError(null)
+    setHint(null)
 
     const recognition = new SpeechRecognition()
     recognition.lang = 'es-419'
@@ -93,6 +122,7 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
     recognition.onerror = event => {
       const message = event.error ? `voice error: ${event.error}` : 'voice error'
       setError(message)
+      setHint(describeVoicePermissionHint(event.error ?? null, true))
       recognitionRef.current = null
       syncState('error')
     }
@@ -140,12 +170,14 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
       recognitionRef.current = null
       const message = startError instanceof Error ? startError.message : String(startError)
       setError(`voice start error: ${message}`)
+      setHint('Volvé a intentar después de aceptar permisos de micrófono y reconocimiento de voz.')
       syncState('error')
     }
   }, [disabled, onTranscript, syncState])
 
   const clearError = useCallback(() => {
     setError(null)
+    setHint(null)
     if (stateRef.current === 'error') {
       syncState('idle')
     }
@@ -155,6 +187,7 @@ export function useVoiceInput({ onTranscript, disabled = false }: UseVoiceInputO
     supported,
     state,
     error,
+    hint,
     startListening,
     stopListening,
     clearError

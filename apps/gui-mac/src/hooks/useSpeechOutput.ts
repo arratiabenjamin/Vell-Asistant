@@ -9,6 +9,23 @@ type UseSpeechOutputOptions = {
   volume?: number
 }
 
+function describeSpeechHint(supported: boolean, error: string | null): string | null {
+  if (!supported) {
+    return 'Este runtime no expone síntesis de voz. La app seguirá funcionando por texto.'
+  }
+
+  if (!error) return null
+
+  switch (error) {
+    case 'interrupted':
+      return 'La síntesis fue interrumpida; podés repetir la lectura.'
+    case 'not-allowed':
+      return 'El navegador bloqueó la síntesis. Probá de nuevo o revisá permisos del runtime.'
+    default:
+      return null
+  }
+}
+
 export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
   const { lang = 'es-CL', rate = 1, pitch = 1, volume = 1 } = options
   const speechSynthesisRef = useRef<SpeechSynthesis | null>(null)
@@ -16,6 +33,7 @@ export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
   const stateRef = useRef<SpeechOutputState>('idle')
   const [state, setState] = useState<SpeechOutputState>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [hint, setHint] = useState<string | null>(null)
 
   const supported = useMemo(() => {
     if (typeof window === 'undefined') return false
@@ -25,6 +43,12 @@ export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  useEffect(() => {
+    if (!supported) {
+      setHint(describeSpeechHint(false, null))
+    }
+  }, [supported])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
@@ -50,6 +74,7 @@ export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
 
   const clearError = useCallback(() => {
     setError(null)
+    setHint(null)
     if (stateRef.current === 'error') {
       syncState('idle')
     }
@@ -62,12 +87,14 @@ export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
 
       if (!supported) {
         setError('Speech synthesis no disponible en este runtime.')
+        setHint(describeSpeechHint(false, null))
         syncState('unsupported')
         return
       }
 
       cancel()
       setError(null)
+      setHint(null)
 
       const synthesis = speechSynthesisRef.current ?? window.speechSynthesis
       const utterance = new SpeechSynthesisUtterance(normalized)
@@ -83,6 +110,7 @@ export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
       utterance.onerror = event => {
         const message = event.error ? `tts error: ${event.error}` : 'tts error'
         setError(message)
+        setHint(describeSpeechHint(true, event.error ?? null))
         utteranceRef.current = null
         syncState('error')
       }
@@ -101,6 +129,7 @@ export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
       } catch (speakError) {
         const message = speakError instanceof Error ? speakError.message : String(speakError)
         setError(`tts start error: ${message}`)
+        setHint('Probá nuevamente desde la GUI nativa; si persiste, usá salida por texto.')
         utteranceRef.current = null
         syncState('error')
       }
@@ -112,6 +141,7 @@ export function useSpeechOutput(options: UseSpeechOutputOptions = {}) {
     supported,
     state,
     error,
+    hint,
     speak,
     cancel,
     clearError

@@ -40,6 +40,8 @@ export default function App() {
     setCurrentSessionById,
     resumeLatestSession,
     createSession,
+    createRealSession,
+    resolveRealProvider,
     submitPrompt,
     approve,
     reject,
@@ -50,9 +52,13 @@ export default function App() {
     verifyOpenAIApiKey
   } = useForgeDaemon()
 
-  const headerModel = `${currentSessionRecord?.provider ?? status?.defaultProvider ?? '-'} / ${
+  const currentSessionProvider = currentSessionRecord?.provider ?? null
+  const headerProvider = currentSessionProvider ?? status?.defaultProvider ?? '-'
+  const isMockSession = currentSessionProvider === 'mock'
+  const headerModel = `${headerProvider} / ${
     currentSessionRecord?.model ?? 'default'
   }`
+  const preferredRealProvider = resolveRealProvider()
 
   const recentDelegationEvents = useMemo(
     () =>
@@ -93,6 +99,7 @@ export default function App() {
           events={events}
           agentActivity={currentSessionAgentActivity}
           onCreateSession={createSession}
+          onCreateRealSession={createRealSession}
           onSwitchSession={setCurrentSessionById}
           onSubmitPrompt={submitPrompt}
           onResumeLatest={resumeLatestSession}
@@ -205,9 +212,15 @@ export default function App() {
             <p className="eyebrow">Session</p>
             <p>
               <strong>{shortId(currentSessionRecord?.id)}</strong>{' '}
-              <span className="badge neutral">{currentSessionRecord?.title ?? 'sin sesión activa'}</span>
+              <span className={`badge ${isMockSession ? 'warn' : 'neutral'}`}>
+                {currentSessionRecord?.title ?? 'sin sesión activa'}
+              </span>
             </p>
-            <p className="muted">Current orchestration entrypoint</p>
+            <p className="muted">
+              {isMockSession
+                ? 'Mock session: responderá como eco/simulación.'
+                : 'Current orchestration entrypoint'}
+            </p>
           </div>
 
           <div>
@@ -216,6 +229,7 @@ export default function App() {
               <strong>{truncate(currentSessionRecord?.projectPath ?? '(sin proyecto)', 56)}</strong>
             </p>
             <p className="muted">Model: {headerModel}</p>
+            {isMockSession ? <p className="muted">Real provider recomendado: {preferredRealProvider}</p> : null}
           </div>
 
           <div>

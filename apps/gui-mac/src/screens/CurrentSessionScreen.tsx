@@ -15,6 +15,7 @@ type CurrentSessionScreenProps = {
   events: DaemonEvent[]
   agentActivity: AgentRunSnapshot | null
   onCreateSession: (title?: string) => Promise<void>
+  onCreateRealSession: (title?: string) => Promise<void>
   onSwitchSession: (sessionId: string) => Promise<void>
   onSubmitPrompt: (content: string) => Promise<void>
   onResumeLatest: () => Promise<void>
@@ -55,6 +56,7 @@ export function CurrentSessionScreen({
   events,
   agentActivity,
   onCreateSession,
+  onCreateRealSession,
   onSwitchSession,
   onSubmitPrompt,
   onResumeLatest,
@@ -82,6 +84,8 @@ export function CurrentSessionScreen({
   }, [events, session?.session.id])
 
   const agentEvents = useMemo(() => relevantEvents.filter(event => event.type.startsWith('agent.')), [relevantEvents])
+  const sessionProvider = session?.session.provider ?? null
+  const isMockSession = sessionProvider === 'mock'
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
@@ -145,6 +149,7 @@ export function CurrentSessionScreen({
     supported: voiceSupported,
     state: voiceState,
     error: voiceError,
+    hint: voiceHint,
     startListening,
     stopListening,
     clearError: clearVoiceError
@@ -160,6 +165,7 @@ export function CurrentSessionScreen({
     supported: speechSupported,
     state: speechState,
     error: speechError,
+    hint: speechHint,
     speak,
     cancel: stopSpeech,
     clearError: clearSpeechError
@@ -197,7 +203,8 @@ export function CurrentSessionScreen({
         <StatCard
           title="Project / model"
           value={truncate(session?.session.projectPath ?? '(sin proyecto)', 40)}
-          caption={`${session?.session.provider ?? '-'} / ${session?.session.model ?? 'default'}`}
+          caption={`${sessionProvider ?? '-'} / ${session?.session.model ?? 'default'}`}
+          tone={isMockSession ? 'warning' : 'neutral'}
         />
         <StatCard
           title="Execution"
@@ -212,6 +219,24 @@ export function CurrentSessionScreen({
           tone={agentActivity ? agentStatusTone(agentActivity.status) : 'neutral'}
         />
       </div>
+
+      {isMockSession ? (
+        <div className="callout warning">
+          <div>
+            <p className="eyebrow">Mock provider active</p>
+            <strong>Esta sesión responde como simulación o eco.</strong>
+            <p className="muted">
+              Creá una sesión real para hablar con un provider productivo. Si el provider default está en mock,
+              usaremos <code>openai-chatgpt</code>.
+            </p>
+          </div>
+          <div className="actions-row wrap">
+            <button onClick={() => void onCreateRealSession('Sesión real')} disabled={busy}>
+              Crear sesión real
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="card soft-card">
         <div className="actions-row wrap">
@@ -463,6 +488,12 @@ export function CurrentSessionScreen({
             {busy ? 'Enviando...' : 'Enviar prompt'}
           </button>
 
+          {isMockSession ? (
+            <button className="primary" onClick={() => void onCreateRealSession('Sesión real')} disabled={busy}>
+              Crear sesión real
+            </button>
+          ) : null}
+
           <button
             className={voiceState === 'listening' ? 'voice-button listening' : 'voice-button'}
             disabled={!voiceSupported || busy || voiceState === 'sending' || voiceState === 'transcribing'}
@@ -480,16 +511,20 @@ export function CurrentSessionScreen({
           {voiceError ? (
             <>
               <span className="error">{voiceError}</span>
+              {voiceHint ? <span className="muted">{voiceHint}</span> : null}
               <button onClick={clearVoiceError}>Clear voice error</button>
             </>
           ) : null}
+          {!voiceSupported && voiceHint ? <span className="muted">{voiceHint}</span> : null}
 
           {speechError ? (
             <>
               <span className="error">{speechError}</span>
+              {speechHint ? <span className="muted">{speechHint}</span> : null}
               <button onClick={clearSpeechError}>Clear tts error</button>
             </>
           ) : null}
+          {!speechSupported && speechHint ? <span className="muted">{speechHint}</span> : null}
         </div>
 
         {commandFeedback ? <p className="muted">{commandFeedback}</p> : null}
