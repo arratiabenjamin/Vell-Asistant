@@ -93,7 +93,7 @@ La pantalla **Settings** permite:
 
 ## Release macOS
 
-La app nativa usa metadata explícita en `src-tauri/tauri.conf.json` + `src-tauri/tauri.macos.conf.json`.
+La app nativa usa metadata explícita en `src-tauri/tauri.conf.json`, `src-tauri/tauri.macos.conf.json` y `src-tauri/Info.plist`.
 
 Workflow manual:
 
@@ -121,7 +121,7 @@ Antes de construir, el workflow corre `pnpm smoke:gui:mac-clean` para validar un
 - input por micrófono con botón *mantener para hablar*
 - estados UI: `listening`, `transcribing`, `sending`, `error`, `unsupported`
 - el transcript se envía al mismo flujo de prompt del daemon (no hay lógica paralela)
-- en macOS nativo, se declara `NSMicrophoneUsageDescription` en `src-tauri/tauri.macos.conf.json`
+- en macOS nativo, se declara `NSMicrophoneUsageDescription` en `src-tauri/Info.plist`
 
 ## Limitaciones actuales
 

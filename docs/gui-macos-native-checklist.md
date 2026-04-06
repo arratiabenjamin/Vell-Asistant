@@ -90,7 +90,7 @@ Checks:
 
 - [ ] firma de app (Apple Developer)
 - [ ] notarización
-- [x] metadatos de bundle macOS versionados en `apps/gui-mac/src-tauri/tauri.conf.json` + `apps/gui-mac/src-tauri/tauri.macos.conf.json`
+- [x] metadatos de bundle macOS versionados en `apps/gui-mac/src-tauri/tauri.conf.json` + `apps/gui-mac/src-tauri/tauri.macos.conf.json` + `apps/gui-mac/src-tauri/Info.plist`
 - [x] smoke final para Mac limpia: `pnpm smoke:gui:mac-clean`
 - [ ] secretos Apple cargados en GitHub Actions para `gui-native-release-macos`
 

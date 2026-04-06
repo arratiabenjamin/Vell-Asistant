@@ -19,6 +19,7 @@ type TauriConfig = {
     targets?: string[]
     macOS?: {
       signingIdentity?: string
+      infoPlist?: string
     }
   }
 }
@@ -200,6 +201,9 @@ async function main(): Promise<void> {
 
   if (macConfig) {
     const targets = [...(macConfig.bundle?.targets ?? [])].sort().join(',')
+    const infoPlistPath = macConfig.bundle?.macOS?.infoPlist
+      ? resolve(tauriRoot, macConfig.bundle.macOS.infoPlist)
+      : null
     checks.push({
       name: 'macOS bundle metadata',
       ok:
@@ -210,6 +214,14 @@ async function main(): Promise<void> {
       blocker: true,
       info: `active=${String(macConfig.bundle?.active ?? false)} category=${macConfig.bundle?.category ?? '-'} targets=${targets || '-'} signingIdentity=${macConfig.bundle?.macOS?.signingIdentity ?? '-'}`,
       fix: 'revisá apps/gui-mac/src-tauri/tauri.macos.conf.json'
+    })
+
+    checks.push({
+      name: 'macOS Info.plist',
+      ok: Boolean(infoPlistPath && existsSync(infoPlistPath)),
+      blocker: true,
+      info: infoPlistPath ?? 'faltante',
+      fix: 'creá apps/gui-mac/src-tauri/Info.plist y referencialo desde tauri.macos.conf.json'
     })
   }
 

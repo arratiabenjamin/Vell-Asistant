@@ -5,9 +5,7 @@
     "category": "Utility",
     "macOS": {
       "signingIdentity": "-",
-      "infoPlist": {
-        "NSMicrophoneUsageDescription": "Vell necesita acceso al micrófono para push-to-talk local."
-      }
+      "infoPlist": "./Info.plist"
     }
   }
 }
