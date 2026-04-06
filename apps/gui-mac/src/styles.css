@@ -425,6 +425,10 @@ pre {
   overflow: hidden;
 }
 
+.soft-card.scrollable {
+  overflow: auto;
+}
+
 .panel-grid,
 .agent-grid,
 .timeline {

@@ -4,5 +4,7 @@
   <dict>
     <key>NSMicrophoneUsageDescription</key>
     <string>Vell necesita acceso al micrófono para push-to-talk local.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Vell necesita reconocimiento de voz para transcribir push-to-talk.</string>
   </dict>
 </plist>

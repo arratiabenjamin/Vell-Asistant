@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentRunSnapshot, DaemonEvent, Session, SessionDetailResponse } from '@forge/shared'
 import type { SessionUiState } from '../hooks/useForgeDaemon'
 import { useSpeechOutput } from '../hooks/useSpeechOutput'
@@ -22,7 +22,6 @@ type CurrentSessionScreenProps = {
   onOpenAgents: () => void
 }
 
-const MAX_MESSAGES = 28
 const MAX_EVENTS = 18
 
 function sessionStateTone(state: SessionUiState): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
@@ -65,8 +64,9 @@ export function CurrentSessionScreen({
   const [input, setInput] = useState('')
   const [newSessionTitle, setNewSessionTitle] = useState('')
   const [commandFeedback, setCommandFeedback] = useState<string | null>(null)
+  const conversationEndRef = useRef<HTMLDivElement | null>(null)
 
-  const recentMessages = useMemo(() => session?.messages.slice(-MAX_MESSAGES) ?? [], [session?.messages])
+  const recentMessages = useMemo(() => session?.messages ?? [], [session?.messages])
 
   const assistantResponse = useMemo(() => {
     const latestAssistantMessage = [...recentMessages].reverse().find(message => message.role === 'assistant')
@@ -82,6 +82,10 @@ export function CurrentSessionScreen({
   }, [events, session?.session.id])
 
   const agentEvents = useMemo(() => relevantEvents.filter(event => event.type.startsWith('agent.')), [relevantEvents])
+
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+  }, [recentMessages.length, streamingText])
 
   const handleSlashCommand = async (raw: string): Promise<boolean> => {
     const normalized = raw.trim()
@@ -330,6 +334,8 @@ export function CurrentSessionScreen({
               <p>{streamingText}</p>
             </div>
           ) : null}
+
+          <div ref={conversationEndRef} />
         </article>
 
         <div className="list-stack">
